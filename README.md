@@ -1,101 +1,29 @@
-<div align="center">
+# 🌤️ Hava Durumu Uygulaması
 
-<img src="docs/qr-repo.png" alt="github.com/tc-yusufburakdemir/weather-app adresinin QR kodu" width="220">
+Kotlin ile geliştirilmiş basit bir Android hava durumu uygulaması. Şehir arayıp anlık hava durumunu ve tahminleri görebilirsiniz.
 
-**Repoya erişim**
+## Özellikler
 
-[github.com/tc-yusufburakdemir/weather-app](https://github.com/tc-yusufburakdemir/weather-app)
+- Şehir arama
+- Anlık hava durumu
+- Günlük / saatlik tahmin
 
-</div>
-
-# Hava — Şehir Arama ve Hava Tahmini
-
-Bilişim Kampı Android eğitiminin **referans çözümü**. Open-Meteo servisinden şehir arar, seçilen şehrin anlık durumunu, saatlik ve 7 günlük tahminini gösterir; yükleniyor / veri / boş / hata durumlarının tamamını ele alır.
-
-Mimari ayrıntıları için [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-**Teknoloji:** Kotlin · Jetpack Compose (Material 3) · ViewModel + StateFlow · Coroutines · Retrofit + Gson · Navigation Compose
-
-## Mimari — üç katman
-
-*UI görünümü çizer, ViewModel state'i yönetir, Repository veriye erişir.*
-
-```
-UI (Composable)  →  ViewModel (StateFlow)  →  Repository (suspend)  →  Retrofit → Open-Meteo
-```
-
-```
-com.kampplus.hava
-├── MainActivity.kt            Uygulamanın kapısı
-├── model/                     Veri neye benzer?
-│   ├── City.kt                City + CitySearchResponse
-│   ├── Forecast.kt            Forecast + Current/Hourly/Daily
-│   └── WeatherCondition.kt    WMO kodu → emoji + Türkçe etiket
-├── data/                      Veri nereden gelir?
-│   ├── ApiClient.kt           object + Retrofit kurulumu
-│   ├── CityApi.kt             @GET v1/search
-│   ├── ForecastApi.kt         @GET v1/forecast
-│   ├── ForecastResponse.kt    DTO + sütun→satır çevrimi
-│   ├── CityRepository.kt      suspend search()
-│   └── WeatherRepository.kt   suspend getForecast()
-└── ui/                        Ne çizilir, ne zaman değişir?
-    ├── LoadState.kt           Loading / Success / Empty / Error
-    ├── HavaNavHost.kt         iki ekran arası geçiş
-    ├── city/                  CityScreen · CityViewModel · CityCard
-    ├── forecast/              ForecastScreen · ForecastViewModel
-    ├── component/             ShimmerList · EmptyView · ErrorView
-    └── theme/                 Color · Theme · Type
-```
-
-## API — Open-Meteo (anahtar gerekmez)
-
-| Amaç | Çağrı |
-|---|---|
-| Şehir arama | `https://geocoding-api.open-meteo.com/v1/search?name=Ankara&count=10&language=tr` |
-| Tahmin | `https://api.open-meteo.com/v1/forecast?latitude=..&longitude=..&current=..&hourly=..&daily=..&forecast_days=7&timezone=auto` |
-
-- Sonuç yoksa arama yanıtında `results` alanı **hiç gelmez** → Boş (Empty) durumu.
-- Tahmin yanıtı **sütun** biçimindedir: `hourly.time[i]` ile `hourly.temperature_2m[i]` aynı saate aittir.
-- `weather_code` WMO standardındadır (0 açık, 61 yağmur, 95 fırtına…); `WeatherCondition.fromWeatherCode` ile görünüme çevrilir.
-- Ücretsiz kullanım ticari olmayan projeler içindir (~10.000 istek/gün).
-
-## Çalıştırma
+## Kurulum
 
 ```bash
-./gradlew assembleDebug        # debug APK
-./gradlew testDebugUnitTest    # unit testler
-./gradlew spotlessApply        # ktlint formatı (denetim için spotlessCheck)
-./gradlew assembleRelease      # release APK (R8 açık)
+git clone https://github.com/beyzarslann/weather-app.git
 ```
 
-Android SDK yolunu `local.properties` içinde `sdk.dir=...` ile veya `ANDROID_HOME` ortam değişkeniyle verin.
+Projeyi Android Studio'da açın, Gradle senkronizasyonu bittikten sonra çalıştırın.
 
-## Checkpoint'ler
+### Eklediklerim
 
-Her ders bloğunun sonunda projenin olması gereken hâli ayrı bir branch'tedir. `cpN` = **Uygulama N+1**.
+- **Canlı arama:** Yazmayı bıraktıktan kısa süre sonra otomatik arama yapılır (debounce). En az 2 harf gerekir ve eski istekler iptal edilir.
+- **Daha isabetli sonuçlar:** Arama sonuçları yalnızca yerleşim yerleriyle filtrelenir ve nüfusa göre sıralanır.
+- **Dinamik arka plan:** Tahmin ekranının arka planı hava durumuna göre değişen animasyonlu bir gradyandır.
+- **Aşağı çekip yenileme:** Yenileme sırasında mevcut veri ekranda kalmaya devam eder.
 
-| Branch | Karşılığı | İçerik |
-|---|---|---|
-| `cp1-baslangic` | — | Boş Empty Activity projesi, "Merhaba Kamp!" |
-| `cp1-bitis` / `cp2-baslangic` | Uygulama 2 | Sabit şehir listesi, `CityCard` + plaka rozeti, `LazyColumn`, tıklamada `Log.d` |
-| `cp2-bitis` / `cp3-baslangic` | Uygulama 3 | Arama kutusu, `rememberSaveable`, filtre, boş durum, `CityViewModel`, `model/data/ui` paketleri |
-| `cp3-bitis` / `cp4-baslangic` | Uygulama 4 | Retrofit + Gson, `ApiClient`, `CityRepository`, dört durum, Shimmer, `try/catch` |
-| `cp4-bitis` (= `main`) | Uygulama 5 | Tahmin ekranı + navigasyon, cila, testler |
-
-Bir bloğu yetiştiremediyseniz kodunuzu `katilimci/<ad>/cpN` branch'ine kaydedip sonraki bloğun başlangıç branch'ine geçin.
-
-`archive/v1-clean-arch` branch'i, projenin önceki Clean Architecture + Hilt + Room sürümünü saklar.
-
-## Testler
-
-| Test | Neyi korur |
-|---|---|
-| `WeatherConditionTest` | WMO kod → görünüm eşlemesi |
-| `CityApiTest` | Gson `@SerializedName` eşlemesi (sessizce bozulur) |
-| `ForecastApiTest` | Sütun → satır çevrimi (index kayması hata vermez) |
-| `CityViewModelTest` | Dört durum + "Tekrar dene" |
-| `ForecastViewModelTest` | Rota parametreleri + durumlar |
-
-## Release imzası
-
-`keystore.properties.example` dosyasını `keystore.properties` olarak kopyalayıp doldurun (repoya girmez). Dosya yoksa release APK debug anahtarıyla imzalanır.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/02d01d7e-2d34-4d38-b7c4-2edfb9b1e6d8" width="250" />
+  <img src="https://github.com/user-attachments/assets/5d1a3dd9-e491-42a8-bae4-4e20f79b5a82" width="250" />
+</p>
