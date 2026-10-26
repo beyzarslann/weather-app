@@ -9,9 +9,15 @@ import com.kampplus.hava.data.OpenMeteoCityRepository
 import com.kampplus.hava.model.City
 import com.kampplus.hava.ui.LoadState
 import java.io.IOException
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -42,9 +48,37 @@ class CityViewModel(
     private val _uiState = MutableStateFlow<LoadState<List<City>>>(LoadState.Loading)
     val uiState: StateFlow<LoadState<List<City>>> = _uiState.asStateFlow()
 
+    /** Süren arama; yenisi başlarken iptal edilir. */
+    private var searchJob: Job? = null
+
+    /** En son aranan metin; aynı kelimeyi iki kez aramamak için. */
+    private var lastSearchedQuery: String? = null
+
     init {
         // Ekran boş açılmasın diye açılışta bir arama yapılır.
         search()
+        observeQuery()
+    }
+
+    /**
+     * Canlı arama: kullanıcı yazmayı bıraktıktan [DEBOUNCE_MS] sonra aramayı tetikler.
+     *
+     * `debounce`: her yeni harf sayacı sıfırlar. "Ankara" hızlıca yazılırsa
+     * 6 istek değil, yalnızca 1 istek atılır.
+     */
+    @OptIn(FlowPreview::class)
+    private fun observeQuery() {
+        viewModelScope.launch {
+            _query
+                .drop(1) // Açılıştaki ilk değeri init zaten arıyor.
+                .map { it.trim() }
+                .debounce(DEBOUNCE_MS)
+                .filter { it.length >= MIN_QUERY_LENGTH }
+                .collect { query ->
+                    // Enter ile az önce aranan kelime tekrar aranmaz.
+                    if (query != lastSearchedQuery) search()
+                }
+        }
     }
 
     /** Kullanıcı arama kutusuna her harf yazdığında çağrılır. */
@@ -59,7 +93,11 @@ class CityViewModel(
      * işi otomatik iptal eder, yarıda kalan istek sızıntı yapmaz.
      */
     fun search() {
-        viewModelScope.launch {
+        // Önceki istek hâlâ sürüyorsa iptal: geç gelen eski cevap
+        // yeni sonucun üstüne yazmasın.
+        searchJob?.cancel()
+        lastSearchedQuery = _query.value.trim()
+        searchJob = viewModelScope.launch {
             _uiState.value = LoadState.Loading
             _uiState.value = try {
                 val cities = repository.search(_query.value)
@@ -87,5 +125,11 @@ class CityViewModel(
 
         /** Uygulama ilk açıldığında aranan şehir. */
         const val INITIAL_QUERY = "İstanbul"
+
+        /** Son harften sonra aramadan önce beklenen süre. */
+        const val DEBOUNCE_MS = 400L
+
+        /** Bundan kısa metinlerle otomatik arama yapılmaz. */
+        const val MIN_QUERY_LENGTH = 2
     }
 }

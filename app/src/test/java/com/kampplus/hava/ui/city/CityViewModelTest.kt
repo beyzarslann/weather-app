@@ -6,7 +6,9 @@ import com.kampplus.hava.testing.sampleCity
 import com.kampplus.hava.ui.LoadState
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -104,17 +106,61 @@ class CityViewModelTest {
     }
 
     @Test
-    fun `onQueryChange arama metnini gunceller ama istek atmaz`() = runTest {
+    fun `yazmayi birakinca 400 ms sonra otomatik arar`() = runTest {
         val viewModel = createViewModel()
         advanceUntilIdle()
         val callsAfterInit = repository.callCount
 
         viewModel.onQueryChange("Rize")
+        advanceTimeBy(300)
+        runCurrent()
+        // Süre dolmadı, istek yok.
+        assertEquals(callsAfterInit, repository.callCount)
+
+        advanceUntilIdle()
+        assertEquals(callsAfterInit + 1, repository.callCount)
+        assertEquals("Rize", repository.lastQuery)
+    }
+
+    @Test
+    fun `hizli yazilan harfler tek istege doner`() = runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        val callsAfterInit = repository.callCount
+
+        listOf("R", "Ri", "Riz", "Rize").forEach {
+            viewModel.onQueryChange(it)
+            advanceTimeBy(100)
+        }
         advanceUntilIdle()
 
-        assertEquals("Rize", viewModel.query.value)
-        // Her harfte istek atılmaz; arama yalnızca search() ile tetiklenir.
+        assertEquals(callsAfterInit + 1, repository.callCount)
+        assertEquals("Rize", repository.lastQuery)
+    }
+
+    @Test
+    fun `tek harfle otomatik arama yapilmaz`() = runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        val callsAfterInit = repository.callCount
+
+        viewModel.onQueryChange("R")
+        advanceUntilIdle()
+
         assertEquals(callsAfterInit, repository.callCount)
+    }
+
+    @Test
+    fun `enter sonrasi debounce ayni kelimeyi tekrar aramaz`() = runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        val callsAfterInit = repository.callCount
+
+        viewModel.onQueryChange("Rize")
+        viewModel.search() // Kullanıcı Enter'a bastı.
+        advanceUntilIdle()
+
+        assertEquals(callsAfterInit + 1, repository.callCount)
     }
 
     @Test

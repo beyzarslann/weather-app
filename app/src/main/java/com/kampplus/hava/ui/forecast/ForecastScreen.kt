@@ -50,6 +50,9 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.foundation.background
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
 
 /**
  * Tahmin ekranının bağlayıcı katmanı; ViewModel'i edinir ve state'i aktarır.
@@ -85,10 +88,18 @@ fun ForecastScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+
+    val condition = (uiState as? LoadState.Success)?.data?.current?.let {
+        WeatherCondition.fromWeatherCode(it.weatherCode)
+    }
+
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.background(weatherBackground(condition)),
+        // Scaffold ve üst bar kendi düz rengini çizmesin ki gradient görünsün.
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 title = { Text(cityName.ifEmpty { stringResource(R.string.detail_title) }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
