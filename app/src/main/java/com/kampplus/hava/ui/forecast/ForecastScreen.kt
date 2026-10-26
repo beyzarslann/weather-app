@@ -1,5 +1,6 @@
 package com.kampplus.hava.ui.forecast
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,10 +26,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,9 +53,6 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToInt
-import androidx.compose.foundation.background
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.ui.graphics.Color
 
 /**
  * Tahmin ekranının bağlayıcı katmanı; ViewModel'i edinir ve state'i aktarır.
@@ -88,7 +88,6 @@ fun ForecastScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-
     val condition = (uiState as? LoadState.Success)?.data?.current?.let {
         WeatherCondition.fromWeatherCode(it.weatherCode)
     }
