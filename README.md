@@ -12,12 +12,10 @@ kendi özelliklerimi ekleyerek geliştirdiğim bir uygulamadır.
   <tr>
     <td align="center"><img src="docs/screenshots/arama.png" width="220" alt="Arama ekranı" /><br />Arama</td>
     <td align="center"><img src="docs/screenshots/tahmin.png" width="220" alt="Tahmin ekranı" /><br />Tahmin</td>
-    <td align="center"><img src="docs/screenshots/yagmur.png" width="220" alt="Yağmurlu hava" /><br />Yağmurlu hava</td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/screenshots/yagmur.png" width="220" alt="Yağmurlu hava" /><br />Yağmurlu hava</td>
     <td align="center"><img src="docs/screenshots/hatirlatici.png" width="220" alt="Hava hatırlatıcısı" /><br />Hatırlatıcı</td>
-    <td align="center"><img src="docs/screenshots/efektler.gif" width="220" alt="Hava efektleri" /><br />Hava efektleri</td>
-    <td></td>
   </tr>
 </table>
 
@@ -68,53 +66,6 @@ kendi özelliklerimi ekleyerek geliştirdiğim bir uygulamadır.
 
 Kotlin · Jetpack Compose · Material 3 · MVVM · StateFlow · Coroutines · Retrofit · Gson · Navigation Compose · WorkManager · DataStore · Open-Meteo API
 
-## Mimari
-
-Uygulama tek modül ve üç katmandan oluşur. `model/` veri modellerini ve kuralları içerir; saf Kotlin'dir ve
-Android'e bağlı değildir. `data/` Retrofit servislerini, DataStore'u ve bunları saklayan repository'leri
-içerir; her repository bir arayüzdür, testlerde sahtesi verilir. `ui/` Compose ekranlarını ve state'i
-`StateFlow` ile tutan ViewModel'leri içerir. `reminder/` paketi arka planda çalışan hatırlatıcı işlerini
-aynı repository'ler üzerinden yürütür.
-
-```
-com.kampplus.hava
-├── MainActivity.kt              Tek Activity; bildirimden gelen şehri açar
-├── data/
-│   ├── ApiClient.kt             Retrofit kurulumu
-│   ├── CityApi.kt               Şehir arama servisi
-│   ├── CityRepository.kt
-│   ├── ForecastApi.kt           Tahmin servisi (7 veya 16 gün)
-│   ├── ForecastResponse.kt      Sütun → satır çevrimi
-│   ├── ReminderRepository.kt    Hatırlatıcılar (DataStore + Gson)
-│   └── WeatherRepository.kt
-├── model/
-│   ├── City.kt
-│   ├── Forecast.kt              Tahmin modelleri, şehrin saatine göre "şu an" ve "bugün"
-│   ├── ForecastChangeDetector.kt
-│   ├── OutfitAdvisor.kt
-│   ├── ReminderMessages.kt
-│   ├── TurkishText.kt           Gün adları, bulunma eki ("Ankara'da")
-│   ├── WeatherCondition.kt      WMO kodu → emoji ve etiket
-│   └── WeatherReminder.kt
-├── reminder/
-│   ├── ReminderChecker.kt       Arka plan işlerinin kararları
-│   ├── ReminderNotifier.kt      Bildirim kanalı ve bildirimler
-│   ├── ReminderScheduler.kt     WorkManager planlaması
-│   ├── ReminderService.kt       Kayıt + planlama
-│   └── ReminderWorkers.kt       Günlük kontrol ve akşam özeti işleri
-└── ui/
-    ├── ForecastDeepLink.kt
-    ├── HavaNavHost.kt
-    ├── LoadState.kt
-    ├── city/                    CityCard, CityScreen, CityViewModel, WelcomeView
-    ├── component/               EmptyView, ErrorView, ShimmerList
-    ├── forecast/                ForecastScreen, ForecastViewModel, OutfitCard, ReminderBell,
-    │                            WeatherBackground, WeatherEffects
-    └── theme/                   Color, Theme, Type
-```
-
-Veri akışı, durumlar, hata yönetimi ve hatırlatıcı işlerinin ayrıntıları: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-
 ## Kurulum ve çalıştırma
 
 ```bash
@@ -135,28 +86,6 @@ Komut satırından:
 Windows'ta `./gradlew` yerine `gradlew.bat` kullanın.
 
 API anahtarı gerekmez: Open-Meteo ücretsizdir ve anahtar istemez.
-
-## Testler
-
-Testler JVM üzerinde, emülatör olmadan çalışır. Ağ istekleri MockWebServer ile, zaman `kotlinx-coroutines-test` ile taklit edilir.
-
-| Test | Koruduğu davranış |
-|---|---|
-| `CityApiTest` | Şehir JSON'unun modele eşlenmesi, eksik alanlar, istek parametreleri |
-| `ForecastApiTest` | Sütun → satır çevrimi, UV ve rüzgâr alanları, varsayılan 7 günlük istek |
-| `ReminderRepositoryTest` | Hatırlatıcıların DataStore'a yazılıp okunması, silme, bozuk JSON |
-| `CityTest` | Alt başlıkta "Türkiye" gösterimi |
-| `WeatherConditionTest` | WMO kodlarının emoji ve etikete eşlenmesi |
-| `OutfitAdvisorTest` | Sıcaklık bantları ve sınır değerleri, hissedilen sıcaklık, yağış, kar, rüzgâr, UV, özet cümlesi |
-| `ForecastChangeDetectorTest` | "Tahmin değişti" eşikleri ve sınır değerleri, bildirim metni |
-| `ForecastTimeTest` | Saatlik listenin ve "bugün"ün şehrin saatine göre seçilmesi |
-| `ReminderDateRangeTest` | Seçilebilir tarih aralığı (yarından itibaren 15 gün) |
-| `ReminderMessagesTest` | Akşam özeti metni |
-| `TurkishTextTest` | Bulunma eki ve Türkçe tarih biçimi |
-| `ReminderCheckerTest` | İlk kontrolde bildirim olmaması, değişimde bildirim, ağ hatasında yeniden deneme, süresi geçen kayıtlar |
-| `ReminderServiceTest` | Kayıtla birlikte işlerin planlanması ve iptali, akşam özetinin zamanı |
-| `CityViewModelTest` | Arama durumları, debounce, boş kutu, popüler şehir çipleri, hatırlatıcı listesi |
-| `ForecastViewModelTest` | Tahmin durumları, yenilemede verinin korunması, hatırlatıcı kurma |
 
 ## Teşekkür
 
