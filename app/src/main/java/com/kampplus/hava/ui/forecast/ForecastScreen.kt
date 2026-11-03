@@ -89,7 +89,6 @@ fun ForecastRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: 
  * Üç bölüm: anlık durum başlığı, saatlik yatay liste, günlük dikey liste.
  * Dört durumun tamamı burada da karşılanır.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForecastScreen(
     cityName: String,
@@ -103,9 +102,20 @@ fun ForecastScreen(
         WeatherCondition.fromWeatherCode(it.weatherCode)
     }
 
+    // Üç katman, alttan üste: gradient arka plan → hava efektleri → ekran içeriği.
+    // Efektler Scaffold'un altında kaldığı için kartlar ve yazılar her zaman üstte durur.
+    Box(modifier = modifier.background(weatherBackground(condition))) {
+        WeatherEffects(condition = condition)
+        ForecastScaffold(cityName = cityName, subtitle = subtitle, uiState = uiState, onBack = onBack, onRetry = onRetry)
+    }
+}
+
+/** Üst bar ve dört durumun içeriği. Arka planı şeffaftır; altındaki katmanlar görünür. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ForecastScaffold(cityName: String, subtitle: String, uiState: LoadState<Forecast>, onBack: () -> Unit, onRetry: () -> Unit) {
     Scaffold(
-        modifier = modifier.background(weatherBackground(condition)),
-        // Scaffold ve üst bar kendi düz rengini çizmesin ki gradient görünsün.
+        // Scaffold ve üst bar kendi düz rengini çizmesin ki gradient ve efektler görünsün.
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
