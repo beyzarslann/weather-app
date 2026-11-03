@@ -59,6 +59,7 @@ import com.kampplus.hava.model.CurrentWeather
 import com.kampplus.hava.model.DailyForecast
 import com.kampplus.hava.model.Forecast
 import com.kampplus.hava.model.HourlyForecast
+import com.kampplus.hava.model.OutfitAdvisor
 import com.kampplus.hava.model.WeatherCondition
 import com.kampplus.hava.ui.LoadState
 import com.kampplus.hava.ui.component.ErrorView
@@ -219,12 +220,15 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
             .padding(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        CurrentWeatherHeader(
-            subtitle = subtitle,
-            current = forecast.current,
-            today = forecast.daily.firstOrNull(),
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+        val today = forecast.daily.firstOrNull()
+        // Öneri yalnızca tahmin değişince yeniden hesaplanır, her yeniden çizimde değil.
+        // Günlük liste boşsa "günün geneli" bilinmez; kart hiç gösterilmez.
+        val outfit = remember(forecast) { today?.let { OutfitAdvisor.advise(it, forecast.current) } }
+        val sideBySide = Modifier.padding(horizontal = 16.dp)
+
+        CurrentWeatherHeader(subtitle = subtitle, current = forecast.current, today = today, modifier = sideBySide)
+        outfit?.let { OutfitCard(advice = it, modifier = sideBySide) }
+        CurrentMetricsCard(current = forecast.current, modifier = sideBySide)
         SectionTitle(stringResource(R.string.detail_hourly))
         HourlyRow(hours = forecast.hourly)
         SectionTitle(stringResource(R.string.detail_daily))
@@ -244,7 +248,7 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
 
 /**
  * Ortalanmış dikey başlık: şehir → emoji → büyük sıcaklık → durum →
- * bugünün en yüksek/en düşüğü; en altta hissedilen/nem/rüzgâr kartı.
+ * bugünün en yüksek/en düşüğü. Altındaki kartlar [ForecastContent]'te dizilir.
  */
 @Composable
 private fun CurrentWeatherHeader(subtitle: String, current: CurrentWeather, today: DailyForecast?, modifier: Modifier = Modifier) {
@@ -286,28 +290,32 @@ private fun CurrentWeatherHeader(subtitle: String, current: CurrentWeather, toda
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
-        Card(
+    }
+}
+
+/**
+ * Hissedilen / nem / rüzgâr üçlüsü.
+ *
+ * Başlıktan ayrı bir bileşen; böylece "Bugün ne giysem?" kartı ikisinin arasına girebiliyor.
+ */
+@Composable
+private fun CurrentMetricsCard(current: CurrentWeather, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.fillMaxWidth(), colors = translucentCardColors()) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
-            colors = translucentCardColors()
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                // Bu üç alan servis tarafından gönderilmeyebilir; yalnızca varsa çizilir.
-                current.apparentTemperatureC?.let {
-                    Metric(stringResource(R.string.detail_feels_like), degrees(it))
-                }
-                current.humidityPercent?.let {
-                    Metric(stringResource(R.string.detail_humidity), "%$it")
-                }
-                current.windSpeedKmh?.let {
-                    Metric(stringResource(R.string.detail_wind), "${it.roundToInt()} km/sa")
-                }
+            // Bu üç alan servis tarafından gönderilmeyebilir; yalnızca varsa çizilir.
+            current.apparentTemperatureC?.let {
+                Metric(stringResource(R.string.detail_feels_like), degrees(it))
+            }
+            current.humidityPercent?.let {
+                Metric(stringResource(R.string.detail_humidity), "%$it")
+            }
+            current.windSpeedKmh?.let {
+                Metric(stringResource(R.string.detail_wind), "${it.roundToInt()} km/sa")
             }
         }
     }
@@ -491,7 +499,7 @@ private fun SectionTitle(text: String) {
  * hissedilir, yazılar ise okunaklı kalır. Oranı değiştirmek için tek yer burası.
  */
 @Composable
-private fun translucentCardColors(): CardColors = CardDefaults.cardColors(
+internal fun translucentCardColors(): CardColors = CardDefaults.cardColors(
     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = CARD_ALPHA)
 )
 

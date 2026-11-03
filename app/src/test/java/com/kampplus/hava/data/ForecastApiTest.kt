@@ -9,6 +9,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -89,6 +90,38 @@ class ForecastApiTest {
     }
 
     @Test
+    fun `gunluk uv ve ruzgar ayni index ile eslenir`() = runTest {
+        server.enqueue(MockResponse().setBody(readResource("forecast_single.json")))
+
+        val daily = fetchForecast().daily
+
+        assertEquals(5.85, checkNotNull(daily[0].uvIndexMax), 0.01)
+        assertEquals(22.4, checkNotNull(daily[0].maxWindSpeedKmh), 0.01)
+        // İkinci günün UV değeri null: satır atlanmaz, yalnızca alan boş kalır.
+        assertNull(daily[1].uvIndexMax)
+        assertEquals(31.0, checkNotNull(daily[1].maxWindSpeedKmh), 0.01)
+    }
+
+    @Test
+    fun `uv ve ruzgar sutunlari hic gelmezse gun yine okunur`() = runTest {
+        // Eski bir yanıt ya da servisin bu alanları göndermediği bir durum.
+        server.enqueue(
+            MockResponse().setBody(
+                """{"latitude":39.9,"longitude":32.8,
+                   "current":{"time":"2026-09-24T11:30","temperature_2m":14.5,"weather_code":2},
+                   "daily":{"time":["2026-09-24"],"weather_code":[2],
+                            "temperature_2m_max":[18.1],"temperature_2m_min":[9.0]}}"""
+            )
+        )
+
+        val daily = api.getForecast(39.9, 32.8).toForecast().daily
+
+        assertEquals(1, daily.size)
+        assertNull(daily[0].uvIndexMax)
+        assertNull(daily[0].maxWindSpeedKmh)
+    }
+
+    @Test
     fun `current blogu yoksa hata firlatilir`() = runTest {
         // Bozuk yanıt: sadece koordinatlar var. ViewModel bunu Error durumuna çevirir.
         server.enqueue(MockResponse().setBody("""{"latitude":39.9,"longitude":32.8}"""))
@@ -125,5 +158,8 @@ class ForecastApiTest {
         assertTrue("longitude eksik: $path", path.contains("longitude=32.87"))
         // timezone=auto olmazsa zamanlar UTC gelir ve saatler kayar.
         assertTrue("timezone=auto olmali: $path", path.contains("timezone=auto"))
+        // Kıyafet önerisinin ihtiyaç duyduğu günlük alanlar istenmeli.
+        assertTrue("uv_index_max eksik: $path", path.contains("uv_index_max"))
+        assertTrue("wind_speed_10m_max eksik: $path", path.contains("wind_speed_10m_max"))
     }
 }

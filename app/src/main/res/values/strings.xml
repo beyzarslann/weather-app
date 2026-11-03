@@ -38,6 +38,10 @@
     <string name="detail_humidity">Nem</string>
     <string name="detail_wind">Rüzgâr</string>
     <string name="today">Bugün</string>
+    <!-- "Bugün ne giysem?" kartı. Özet cümlesi ve parça adları OutfitAdvisor'da üretilir. -->
+    <string name="outfit_title">Bugün ne giysem?</string>
+    <!-- Ekran okuyucu için çip açıklaması, ör. "Önerilen: Şemsiye". -->
+    <string name="outfit_item_description">Önerilen: %1$s</string>
     <!-- Saatlik listenin ilk kartında saat yerine gösterilir. -->
     <string name="now">Şimdi</string>
     <!-- Başlıktaki bugünün sıcaklık aralığı. %1$d = en yüksek, %2$d = en düşük. -->

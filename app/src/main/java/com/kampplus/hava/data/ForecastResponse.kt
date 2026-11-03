@@ -65,7 +65,11 @@ data class DailyResponse(
     @SerializedName("temperature_2m_min")
     val temperatureMin: List<Double?>? = null,
     @SerializedName("precipitation_probability_max")
-    val precipitationProbabilityMax: List<Int?>? = null
+    val precipitationProbabilityMax: List<Int?>? = null,
+    @SerializedName("uv_index_max")
+    val uvIndexMax: List<Double?>? = null,
+    @SerializedName("wind_speed_10m_max")
+    val windSpeedMax: List<Double?>? = null
 )
 
 /**
@@ -127,7 +131,10 @@ private fun DailyResponse?.toDailyForecasts(): List<DailyForecast> {
             minTemperatureC = min,
             maxTemperatureC = max,
             weatherCode = code,
-            precipitationProbability = precipitationProbabilityMax?.getOrNull(index)
+            precipitationProbability = precipitationProbabilityMax?.getOrNull(index),
+            // İsteğe bağlı alanlar: sütun hiç gelmese de satır atlanmaz, yalnızca alan boş kalır.
+            uvIndexMax = uvIndexMax?.getOrNull(index),
+            maxWindSpeedKmh = windSpeedMax?.getOrNull(index)
         )
     }
 }

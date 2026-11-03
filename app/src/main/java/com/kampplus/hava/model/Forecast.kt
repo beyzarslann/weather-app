@@ -36,11 +36,22 @@ data class HourlyForecast(
     val precipitationProbability: Int? = null
 )
 
-/** Tek bir günlük tahmin satırı: o günün en düşük ve en yüksek sıcaklığı. */
+/**
+ * Tek bir günlük tahmin satırı: o günün en düşük ve en yüksek sıcaklığı.
+ *
+ * Son üç alan servis tarafından gönderilmeyebilir; nullable oldukları için eksik
+ * olduklarında uygulama bozulmaz, yalnızca ilgili öneri (şemsiye, güneş kremi,
+ * rüzgârlık) verilmez.
+ *
+ * @param uvIndexMax Günün en yüksek UV indeksi (0–11+).
+ * @param maxWindSpeedKmh Günün en yüksek rüzgâr hızı (10 m yükseklikte, km/sa).
+ */
 data class DailyForecast(
     val date: LocalDate,
     val minTemperatureC: Double,
     val maxTemperatureC: Double,
     val weatherCode: Int,
-    val precipitationProbability: Int? = null
+    val precipitationProbability: Int? = null,
+    val uvIndexMax: Double? = null,
+    val maxWindSpeedKmh: Double? = null
 )
