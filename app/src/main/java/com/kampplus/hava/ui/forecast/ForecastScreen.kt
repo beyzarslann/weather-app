@@ -130,7 +130,8 @@ fun ForecastScreen(
         ) {
             when (uiState) {
                 // Tek bir kart beklendiği için burada Shimmer yerine basit gösterge yeterli.
-                LoadState.Loading -> CircularProgressIndicator()
+                // Idle bu ekranda oluşmaz; `when` eksiksiz olsun diye Loading ile aynı görünür.
+                LoadState.Idle, LoadState.Loading -> CircularProgressIndicator()
                 LoadState.Empty -> ErrorView(message = "Bu şehir için tahmin bulunamadı.")
                 is LoadState.Error -> ErrorView(message = uiState.message, onRetry = onRetry)
                 is LoadState.Success -> ForecastContent(subtitle = subtitle, forecast = uiState.data)

@@ -40,5 +40,15 @@ data class City(
 ) {
     /** Kartta ve tahmin ekranında gösterilen alt yazı: "Ankara, Türkiye". */
     val subtitle: String
-        get() = listOfNotNull(admin1, country).distinct().joinToString(", ")
+        get() = listOfNotNull(admin1, displayCountry).distinct().joinToString(", ")
+
+    /**
+     * Ekranda gösterilecek ülke adı.
+     *
+     * Servis Türkiye için resmî adı ("Türkiye Cumhuriyeti") gönderiyor; bu hem
+     * uzun hem de günlük dilde kullanılmıyor. Ülke kodu TR ise kısa adı yazarız,
+     * diğer ülkelerde servisin verdiği ad olduğu gibi kalır.
+     */
+    private val displayCountry: String?
+        get() = if (countryCode == "TR") "Türkiye" else country
 }

@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -32,6 +31,9 @@ import retrofit2.HttpException
  * ViewModel ekran döndüğünde (Activity yeniden kurulurken) yaşamaya devam eder;
  * bu yüzden arama metni ve sonuçlar kaybolmaz.
  *
+ * Ekran boş bir arama kutusuyla açılır ve [LoadState.Idle] durumunda bekler;
+ * kullanıcı yazana ya da popüler şehirlerden birini seçene kadar istek atılmaz.
+ *
  * @param repository Varsayılanı gerçek servis. Testlerde sahte bir repository verilir.
  *   Tüm parametrelerin varsayılanı olduğu için Kotlin parametresiz bir kurucu da üretir;
  *   ekranlarda `viewModel()` bunu kullanabilir.
@@ -42,10 +44,10 @@ class CityViewModel(
 
     // State ViewModel'de MutableStateFlow ile tutulur.
     // Değiştirilebilir alan private'tır; dışarıya yalnızca okunabilir hâli açılır.
-    private val _query = MutableStateFlow(INITIAL_QUERY)
+    private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    private val _uiState = MutableStateFlow<LoadState<List<City>>>(LoadState.Loading)
+    private val _uiState = MutableStateFlow<LoadState<List<City>>>(LoadState.Idle)
     val uiState: StateFlow<LoadState<List<City>>> = _uiState.asStateFlow()
 
     /** Süren arama; yenisi başlarken iptal edilir. */
@@ -55,8 +57,6 @@ class CityViewModel(
     private var lastSearchedQuery: String? = null
 
     init {
-        // Ekran boş açılmasın diye açılışta bir arama yapılır.
-        search()
         observeQuery()
     }
 
@@ -65,25 +65,43 @@ class CityViewModel(
      *
      * `debounce`: her yeni harf sayacı sıfırlar. "Ankara" hızlıca yazılırsa
      * 6 istek değil, yalnızca 1 istek atılır.
+     *
+     * Açılıştaki boş metin [MIN_QUERY_LENGTH] filtresine takılır; bu yüzden
+     * ekran açılır açılmaz istek atılmaz.
      */
     @OptIn(FlowPreview::class)
     private fun observeQuery() {
         viewModelScope.launch {
             _query
-                .drop(1) // Açılıştaki ilk değeri init zaten arıyor.
                 .map { it.trim() }
                 .debounce(DEBOUNCE_MS)
                 .filter { it.length >= MIN_QUERY_LENGTH }
                 .collect { query ->
-                    // Enter ile az önce aranan kelime tekrar aranmaz.
+                    // Enter ile ya da çipe dokunarak az önce aranan kelime tekrar aranmaz.
                     if (query != lastSearchedQuery) search()
                 }
         }
     }
 
-    /** Kullanıcı arama kutusuna her harf yazdığında çağrılır. */
+    /**
+     * Kullanıcı arama kutusuna her harf yazdığında çağrılır.
+     *
+     * Kutu boşalınca beklemeden karşılama görünümüne dönülür: debounce'u
+     * beklemek, temizle düğmesine basıldıktan sonra eski sonuçların bir an
+     * daha görünmesine yol açardı.
+     */
     fun onQueryChange(newQuery: String) {
         _query.value = newQuery
+        if (newQuery.isBlank()) resetToIdle()
+    }
+
+    /**
+     * Popüler şehir çipine dokunulduğunda çağrılır: kutuyu doldurur ve
+     * debounce beklemeden hemen arar.
+     */
+    fun onSuggestionClick(cityName: String) {
+        _query.value = cityName
+        search()
     }
 
     /**
@@ -93,6 +111,11 @@ class CityViewModel(
      * işi otomatik iptal eder, yarıda kalan istek sızıntı yapmaz.
      */
     fun search() {
+        // Boş kutuyla Enter'a basılırsa servise gitmeye gerek yok.
+        if (_query.value.isBlank()) {
+            resetToIdle()
+            return
+        }
         // Önceki istek hâlâ sürüyorsa iptal: geç gelen eski cevap
         // yeni sonucun üstüne yazmasın.
         searchJob?.cancel()
@@ -120,11 +143,21 @@ class CityViewModel(
         }
     }
 
+    /**
+     * Süren aramayı iptal eder ve karşılama görünümüne döner.
+     *
+     * [lastSearchedQuery] da unutulur; kullanıcı aynı şehri yeniden yazarsa
+     * arama "zaten arandı" diye atlanmasın.
+     */
+    private fun resetToIdle() {
+        searchJob?.cancel()
+        searchJob = null
+        lastSearchedQuery = null
+        _uiState.value = LoadState.Idle
+    }
+
     private companion object {
         const val TAG = "CityViewModel"
-
-        /** Uygulama ilk açıldığında aranan şehir. */
-        const val INITIAL_QUERY = "İstanbul"
 
         /** Son harften sonra aramadan önce beklenen süre. */
         const val DEBOUNCE_MS = 400L

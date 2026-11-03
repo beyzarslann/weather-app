@@ -1,5 +1,8 @@
 package com.kampplus.hava.ui.city
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,22 +12,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -39,6 +45,9 @@ import com.kampplus.hava.ui.component.EmptyView
 import com.kampplus.hava.ui.component.ErrorView
 import com.kampplus.hava.ui.component.ShimmerList
 import com.kampplus.hava.ui.theme.HavaTheme
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Şehir arama ekranının "bağlayıcı" katmanı.
@@ -60,6 +69,7 @@ fun CityRoute(onCityClick: (City) -> Unit, modifier: Modifier = Modifier, viewMo
         uiState = uiState,
         onQueryChange = viewModel::onQueryChange,
         onSearch = viewModel::search,
+        onSuggestionClick = viewModel::onSuggestionClick,
         onCityClick = onCityClick,
         modifier = modifier
     )
@@ -69,26 +79,28 @@ fun CityRoute(onCityClick: (City) -> Unit, modifier: Modifier = Modifier, viewMo
  * Şehir arama ekranı: `when` ile her duruma bir görünüm.
  *
  * State tutmaz, yalnızca aldığı değerleri çizer ve olayları yukarı bildirir.
+ *
+ * Üst bar yerine büyük bir başlık kullanıyoruz: bu ekranın geri düğmesi ya da
+ * menüsü yok, TopAppBar yalnızca yer kaplıyordu. `Scaffold`'un verdiği
+ * `innerPadding` durum çubuğunun yüksekliğini zaten içerir.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CityScreen(
     query: String,
     uiState: LoadState<List<City>>,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
+    onSuggestionClick: (String) -> Unit,
     onCityClick: (City) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
-        modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }
-    ) { innerPadding ->
+    Scaffold(modifier = modifier) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            ScreenHeader(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp))
             SearchBar(
                 query = query,
                 onQueryChange = onQueryChange,
@@ -99,6 +111,8 @@ fun CityScreen(
                 // Dört durumun tamamı burada karşılanır. `sealed` olduğu için
                 // bir dalı unutursak Kotlin derleme hatası verir.
                 when (uiState) {
+                    // Kutu boşken "bulunamadı" demek yanlış olur; kullanıcıyı karşılarız.
+                    LoadState.Idle -> WelcomeView(onSuggestionClick = onSuggestionClick)
                     LoadState.Loading -> ShimmerList()
                     is LoadState.Success -> CityList(cities = uiState.data, onCityClick = onCityClick)
                     LoadState.Empty -> EmptyView(
@@ -113,19 +127,67 @@ fun CityScreen(
 }
 
 /**
+ * Ekranın başlığı: üstte bugünün tarihi ("Pazar, 1 Kasım"), altında büyük "Hava".
+ *
+ * Tarih `remember` ile bir kez hesaplanır; her yeniden çizimde biçimlendirmeye gerek yok.
+ */
+@Composable
+private fun ScreenHeader(modifier: Modifier = Modifier) {
+    val today = remember {
+        LocalDate.now().format(HEADER_DATE_FORMAT).replaceFirstChar { it.titlecase(TURKISH) }
+    }
+    Column(modifier = modifier) {
+        Text(
+            text = today,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.headlineMedium
+        )
+    }
+}
+
+/**
  * Arama kutusu.
  *
  * State tutmaz: değeri yukarıdan alır, her değişikliği yukarıya bildirir
  * ("değer aşağı, olay yukarı" — state hoisting).
+ *
+ * Görünüm: yumuşak köşeli, dolgulu bir kutu. Material'in alttaki çizgisi
+ * (indicator) şeffaf yapılır; onun yerine odaklanınca kutunun çevresinde ince
+ * bir primary kenarlık çıkar. Odak bilgisini `interactionSource`'tan okuruz.
  */
 @Composable
 private fun SearchBar(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit, modifier: Modifier = Modifier) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    OutlinedTextField(
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(16.dp)
+    TextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth(),
-        label = { Text(stringResource(R.string.search_hint)) },
+        modifier = modifier
+            .fillMaxWidth()
+            // Odak yokken kenarlık şeffaftır; böylece kutu odaklanınca boyut değiştirip zıplamaz.
+            .border(
+                width = 1.dp,
+                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = shape
+            ),
+        shape = shape,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            // Alttaki çizgiyi her durumda gizliyoruz.
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent
+        ),
+        interactionSource = interactionSource,
+        // Etiket (label) dolgulu kutuda yukarı kayıp kalabalık yapar; sade bir placeholder yeterli.
+        placeholder = { Text(stringResource(R.string.search_hint)) },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             // Temizle düğmesi yalnızca kutu doluyken görünür.
@@ -169,6 +231,11 @@ private fun CityList(cities: List<City>, onCityClick: (City) -> Unit, modifier: 
     }
 }
 
+private val TURKISH: Locale = Locale.forLanguageTag("tr")
+
+/** "Pazar, 1 Kasım" biçimi; gün ve ay adları Türkçe gelir. */
+private val HEADER_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM", TURKISH)
+
 @Preview(showBackground = true)
 @Composable
 private fun CityScreenPreview() {
@@ -183,6 +250,7 @@ private fun CityScreenPreview() {
             ),
             onQueryChange = {},
             onSearch = {},
+            onSuggestionClick = {},
             onCityClick = {}
         )
     }
@@ -197,6 +265,22 @@ private fun CityScreenEmptyPreview() {
             uiState = LoadState.Empty,
             onQueryChange = {},
             onSearch = {},
+            onSuggestionClick = {},
+            onCityClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CityScreenIdlePreview() {
+    HavaTheme {
+        CityScreen(
+            query = "",
+            uiState = LoadState.Idle,
+            onQueryChange = {},
+            onSearch = {},
+            onSuggestionClick = {},
             onCityClick = {}
         )
     }

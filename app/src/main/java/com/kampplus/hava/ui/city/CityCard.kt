@@ -1,5 +1,6 @@
 package com.kampplus.hava.ui.city
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -37,11 +39,18 @@ import com.kampplus.hava.ui.theme.HavaTheme
  */
 @Composable
 fun CityCard(city: City, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = CityCardDefaults.shape,
+        // Beyaz kart + ince kenarlık: gölge yerine çizgiyle ayrışan, sakin bir görünüm.
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(CityCardDefaults.contentPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(CityCardDefaults.spacing)
         ) {
             CountryBadge(code = city.countryCode)
             Column(modifier = Modifier.weight(1f)) {
@@ -75,14 +84,19 @@ fun CityCard(city: City, onClick: () -> Unit, modifier: Modifier = Modifier) {
  *
  * Veri API'den geldiği için elimizde plaka numarası yok; rozete ülke kodunu
  * koyuyoruz. Kod gelmezse "?" gösterilir.
+ *
+ * Renk ülkeye göre değişir: TR sakin mavi (primaryContainer), diğer ülkeler
+ * kum rengi (tertiaryContainer). "Ankara" araması ABD'deki bir Ankara'yı da
+ * döndürebilir; farklı renk, yabancı sonucu bir bakışta ayırt ettirir.
  */
 @Composable
 private fun CountryBadge(code: String?, modifier: Modifier = Modifier) {
+    val isTurkey = code == "TR"
     Surface(
-        modifier = modifier.size(44.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        modifier = modifier.size(CityCardDefaults.badgeSize),
+        shape = CityCardDefaults.badgeShape,
+        color = if (isTurkey) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = if (isTurkey) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
@@ -91,6 +105,18 @@ private fun CountryBadge(code: String?, modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+/**
+ * Kartın ölçüleri tek yerde. [com.kampplus.hava.ui.component.ShimmerList] de bunları
+ * kullanır; böylece yükleniyor iskeleti gerçek kartla birebir aynı boyutta kalır.
+ */
+object CityCardDefaults {
+    val shape = RoundedCornerShape(14.dp)
+    val badgeSize = 40.dp
+    val badgeShape = RoundedCornerShape(10.dp)
+    val contentPadding = 12.dp
+    val spacing = 12.dp
 }
 
 @Preview(showBackground = true)

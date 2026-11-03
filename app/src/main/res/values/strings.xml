@@ -15,6 +15,20 @@
     <string name="action_clear">Temizle</string>
     <string name="action_retry">Tekrar dene</string>
 
+    <!-- Arama kutusu boşken gösterilen karşılama görünümü -->
+    <string name="welcome_title">Hangi şehre bakalım?</string>
+    <string name="welcome_message">Bir şehir adı yaz ya da aşağıdan seç.</string>
+    <string name="popular_cities_title">Popüler şehirler</string>
+    <!-- Çip olarak gösterilen kısayollar; dokununca bu adla arama yapılır. -->
+    <string-array name="popular_cities">
+        <item>İstanbul</item>
+        <item>Ankara</item>
+        <item>İzmir</item>
+        <item>Antalya</item>
+        <item>Bursa</item>
+        <item>Trabzon</item>
+    </string-array>
+
     <!-- Tahmin ekranı -->
     <string name="detail_title">Hava Tahmini</string>
     <string name="action_back">Geri</string>

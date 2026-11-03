@@ -1,9 +1,10 @@
 package com.kampplus.hava.ui
 
 /**
- * Bir ağ isteğinin bitebileceği dört durum.
+ * Bir ağ isteğinin bitebileceği dört durum ve isteğin hiç başlamadığı bekleme hâli.
  *
- * Ekran her an bu dört durumdan **tam olarak birindedir**:
+ * Ekran her an bu durumlardan **tam olarak birindedir**:
+ * - [Idle]    : Henüz istek yapılmadı (ör. arama kutusu boş). Ekran karşılama görünümü çizer.
  * - [Loading] : Veri bekleniyor. Kullanıcı bir şeylerin olduğunu görmeli (Shimmer / gösterge).
  * - [Success] : Veri geldi, içinde kayıt var.
  * - [Empty]   : Cevap geldi ama içi boş. En çok unutulan durum budur.
@@ -16,6 +17,12 @@ package com.kampplus.hava.ui
  * yapıyı paylaşır; dört durumu her ekran için ayrı ayrı yazmak gerekmez.
  */
 sealed interface LoadState<out T> {
+
+    /**
+     * Kullanıcı henüz bir şey istemedi. Yalnızca şehir aramasında kullanılır;
+     * tahmin ekranı açılır açılmaz istek attığı için bu duruma hiç düşmez.
+     */
+    data object Idle : LoadState<Nothing>
 
     data object Loading : LoadState<Nothing>
 

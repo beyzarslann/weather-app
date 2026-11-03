@@ -6,6 +6,7 @@ import com.kampplus.hava.model.City
 import com.kampplus.hava.model.CurrentWeather
 import com.kampplus.hava.model.Forecast
 import java.time.LocalDateTime
+import kotlinx.coroutines.delay
 
 /**
  * Testlerde gerçek repository yerine kullanılan sahteler.
@@ -18,10 +19,13 @@ import java.time.LocalDateTime
 /**
  * @param result Her çağrıda dönecek liste.
  * @param error Doluysa [search] bu hatayı fırlatır.
+ * @param delayMs Cevaptan önce beklenecek sanal süre. Süren bir aramanın iptalini
+ *   test etmek için kullanılır; test zamanlayıcısı bu süreyi anında atlayabilir.
  */
 class FakeCityRepository(
     var result: List<City> = emptyList(),
-    var error: Throwable? = null
+    var error: Throwable? = null,
+    var delayMs: Long = 0L
 ) : CityRepository {
 
     /** Son aranan metin; ViewModel'in doğru sorguyu ilettiğini doğrulamak için. */
@@ -35,6 +39,7 @@ class FakeCityRepository(
     override suspend fun search(query: String): List<City> {
         lastQuery = query
         callCount++
+        if (delayMs > 0) delay(delayMs)
         error?.let { throw it }
         return result
     }
