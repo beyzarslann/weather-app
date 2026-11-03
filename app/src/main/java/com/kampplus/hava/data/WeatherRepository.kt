@@ -12,8 +12,13 @@ import kotlinx.coroutines.withContext
  * bu arayüzü tanır; Retrofit'i veya JSON'u bilmez.
  */
 interface WeatherRepository {
-    /** Verilen koordinat için anlık durum + saatlik + günlük tahmini getirir. */
-    suspend fun getForecast(latitude: Double, longitude: Double): Forecast
+    /**
+     * Verilen koordinat için anlık durum + saatlik + günlük tahmini getirir.
+     *
+     * @param forecastDays Kaç günlük tahmin istendiği. Tahmin ekranı 7 gün gösterir;
+     *   hatırlatıcı işi ileri tarihleri yakalamak için servisin üst sınırı olan 16'yı ister.
+     */
+    suspend fun getForecast(latitude: Double, longitude: Double, forecastDays: Int = ForecastApi.FORECAST_DAYS): Forecast
 }
 
 /** Gerçek uygulama: tahmini Open-Meteo forecast servisinden alır. */
@@ -22,9 +27,9 @@ class OpenMeteoWeatherRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : WeatherRepository {
 
-    override suspend fun getForecast(latitude: Double, longitude: Double): Forecast = withContext(ioDispatcher) {
+    override suspend fun getForecast(latitude: Double, longitude: Double, forecastDays: Int): Forecast = withContext(ioDispatcher) {
         // Ağ yanıtı sütun biçimindedir; toForecast() onu ekranın beklediği
         // satır biçimine çevirir (bkz. ForecastResponse.kt).
-        api.getForecast(latitude = latitude, longitude = longitude).toForecast()
+        api.getForecast(latitude = latitude, longitude = longitude, forecastDays = forecastDays).toForecast()
     }
 }

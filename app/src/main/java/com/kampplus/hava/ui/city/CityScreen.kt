@@ -40,14 +40,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kampplus.hava.R
 import com.kampplus.hava.model.City
+import com.kampplus.hava.model.TurkishText
+import com.kampplus.hava.model.WeatherReminder
 import com.kampplus.hava.ui.LoadState
 import com.kampplus.hava.ui.component.EmptyView
 import com.kampplus.hava.ui.component.ErrorView
 import com.kampplus.hava.ui.component.ShimmerList
 import com.kampplus.hava.ui.theme.HavaTheme
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * Şehir arama ekranının "bağlayıcı" katmanı.
@@ -60,9 +60,15 @@ import java.util.Locale
  * çevirir ve uygulama arka plandayken dinlemeyi durdurur.
  */
 @Composable
-fun CityRoute(onCityClick: (City) -> Unit, modifier: Modifier = Modifier, viewModel: CityViewModel = viewModel()) {
+fun CityRoute(
+    onCityClick: (City) -> Unit,
+    onReminderClick: (WeatherReminder) -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: CityViewModel = viewModel(factory = CityViewModel.Factory)
+) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val reminders by viewModel.reminders.collectAsStateWithLifecycle()
 
     CityScreen(
         query = query,
@@ -71,7 +77,10 @@ fun CityRoute(onCityClick: (City) -> Unit, modifier: Modifier = Modifier, viewMo
         onSearch = viewModel::search,
         onSuggestionClick = viewModel::onSuggestionClick,
         onCityClick = onCityClick,
-        modifier = modifier
+        modifier = modifier,
+        reminders = reminders,
+        onReminderClick = onReminderClick,
+        onReminderDelete = { viewModel.removeReminder(it.id) }
     )
 }
 
@@ -92,7 +101,10 @@ fun CityScreen(
     onSearch: () -> Unit,
     onSuggestionClick: (String) -> Unit,
     onCityClick: (City) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    reminders: List<WeatherReminder> = emptyList(),
+    onReminderClick: (WeatherReminder) -> Unit = {},
+    onReminderDelete: (WeatherReminder) -> Unit = {}
 ) {
     Scaffold(modifier = modifier) { innerPadding ->
         Column(
@@ -112,7 +124,12 @@ fun CityScreen(
                 // bir dalı unutursak Kotlin derleme hatası verir.
                 when (uiState) {
                     // Kutu boşken "bulunamadı" demek yanlış olur; kullanıcıyı karşılarız.
-                    LoadState.Idle -> WelcomeView(onSuggestionClick = onSuggestionClick)
+                    LoadState.Idle -> WelcomeView(
+                        onSuggestionClick = onSuggestionClick,
+                        reminders = reminders,
+                        onReminderClick = onReminderClick,
+                        onReminderDelete = onReminderDelete
+                    )
                     LoadState.Loading -> ShimmerList()
                     is LoadState.Success -> CityList(cities = uiState.data, onCityClick = onCityClick)
                     LoadState.Empty -> EmptyView(
@@ -133,9 +150,8 @@ fun CityScreen(
  */
 @Composable
 private fun ScreenHeader(modifier: Modifier = Modifier) {
-    val today = remember {
-        LocalDate.now().format(HEADER_DATE_FORMAT).replaceFirstChar { it.titlecase(TURKISH) }
-    }
+    // Telefonun tarihi: bu başlık bir şehre değil kullanıcıya ait.
+    val today = remember { TurkishText.dayAndMonth(LocalDate.now()) }
     Column(modifier = modifier) {
         Text(
             text = today,
@@ -230,11 +246,6 @@ private fun CityList(cities: List<City>, onCityClick: (City) -> Unit, modifier: 
         }
     }
 }
-
-private val TURKISH: Locale = Locale.forLanguageTag("tr")
-
-/** "Pazar, 1 Kasım" biçimi; gün ve ay adları Türkçe gelir. */
-private val HEADER_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM", TURKISH)
 
 @Preview(showBackground = true)
 @Composable

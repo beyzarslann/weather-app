@@ -3,17 +3,29 @@ package com.kampplus.hava.ui.forecast
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.google.gson.JsonSyntaxException
 import com.kampplus.hava.data.OpenMeteoWeatherRepository
 import com.kampplus.hava.data.WeatherRepository
 import com.kampplus.hava.model.Forecast
+import com.kampplus.hava.model.WeatherReminder
+import com.kampplus.hava.reminder.ReminderService
 import com.kampplus.hava.ui.LoadState
 import java.io.IOException
+import java.time.LocalDate
+import java.util.UUID
+import kotlin.math.abs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -23,18 +35,16 @@ import retrofit2.HttpException
  * Fark: hangi şehrin tahmini isteneceğini navigasyondan öğrenir.
  * `SavedStateHandle` rota parametrelerini taşır ve süreç
  * öldürülüp geri dönüldüğünde de bu değerler korunur.
+ *
+ * Ekrandan [Factory] ile kurulur: hatırlatıcı servisi Context'e ihtiyaç duyar ve
+ * `viewModel()`'in varsayılan kurucu araması bunu veremez. Testlerde kurucu doğrudan,
+ * sahte repository ve servisle çağrılır.
  */
 class ForecastViewModel(
     savedStateHandle: SavedStateHandle,
-    private val repository: WeatherRepository
+    private val repository: WeatherRepository,
+    private val reminderService: ReminderService
 ) : ViewModel() {
-
-    /**
-     * Compose'un `viewModel()` yardımcısı, tam olarak `(SavedStateHandle)` imzalı bir
-     * kurucu arar. Varsayılan parametre kullanmak bu imzayı üretmediği için ikincil
-     * kurucuyu elle yazıyoruz.
-     */
-    constructor(savedStateHandle: SavedStateHandle) : this(savedStateHandle, OpenMeteoWeatherRepository())
 
     /** Başlıkta gösterilecek şehir adı; rotadan gelir. */
     val cityName: String = savedStateHandle.get<String>(ARG_NAME).orEmpty()
@@ -70,12 +80,46 @@ class ForecastViewModel(
     /** Süren istek (ilk yükleme ya da yenileme). Üst üste çekmelerde ikinci istek atılmaz. */
     private var fetchJob: Job? = null
 
+    /**
+     * Bu şehir için kurulu bir hatırlatıcı var mı? Varsa üst bardaki zil dolu çizilir.
+     *
+     * `stateIn(WhileSubscribed(5_000))`: ekran dinlediği sürece DataStore izlenir; ekran
+     * döndürülürken (birkaç yüz ms dinleyicisiz kalır) akış kapanıp yeniden açılmasın diye
+     * 5 saniye beklenir.
+     */
+    val hasReminder: StateFlow<Boolean> = reminderService.reminders
+        .map { list -> list.any(::isThisCity) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)
+
     init {
         load()
     }
 
     /** Hata ekranındaki "Tekrar dene" düğmesi buraya bağlanır. */
     fun onRetry() = load()
+
+    /**
+     * Seçilen gün için hatırlatıcı kurar. Kayıt ve arka plan işlerinin planlanması
+     * [ReminderService]'in işidir; burada yalnızca ekrandaki şehirden kayıt oluşturulur.
+     */
+    fun createReminder(date: LocalDate) {
+        val reminder = WeatherReminder(
+            id = UUID.randomUUID().toString(),
+            cityName = cityName,
+            subtitle = subtitle,
+            latitude = latitude,
+            longitude = longitude,
+            targetDate = date
+        )
+        viewModelScope.launch { reminderService.add(reminder) }
+    }
+
+    /**
+     * Hatırlatıcı bu ekrandaki şehre mi ait? Koordinatlar karşılaştırılır; ad değil
+     * (iki farklı "Ankara" olabilir). Küçük bir tolerans, ondalık yuvarlama farklarını yutar.
+     */
+    private fun isThisCity(reminder: WeatherReminder) =
+        abs(reminder.latitude - latitude) < COORDINATE_TOLERANCE && abs(reminder.longitude - longitude) < COORDINATE_TOLERANCE
 
     /**
      * Aşağı çekip yenileme.
@@ -145,6 +189,25 @@ class ForecastViewModel(
 
     companion object {
         private const val TAG = "ForecastViewModel"
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        /** Yaklaşık 10 metre; aynı şehrin iki kaydını ayırt etmeye yetecek kadar dar. */
+        private const val COORDINATE_TOLERANCE = 1e-4
+
+        /**
+         * Uygulamanın kullandığı kurulum. `createSavedStateHandle()` rota parametrelerini,
+         * `APPLICATION_KEY` ise hatırlatıcı servisinin ihtiyaç duyduğu Context'i verir.
+         */
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                val application = checkNotNull(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
+                ForecastViewModel(
+                    savedStateHandle = createSavedStateHandle(),
+                    repository = OpenMeteoWeatherRepository(),
+                    reminderService = ReminderService(application)
+                )
+            }
+        }
 
         /** Rota parametrelerinin adları; [com.kampplus.hava.ui.HavaNavHost] ile ortak. */
         const val ARG_NAME = "name"

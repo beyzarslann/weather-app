@@ -158,6 +158,8 @@ class ForecastApiTest {
         assertTrue("longitude eksik: $path", path.contains("longitude=32.87"))
         // timezone=auto olmazsa zamanlar UTC gelir ve saatler kayar.
         assertTrue("timezone=auto olmali: $path", path.contains("timezone=auto"))
+        // Varsayılan 7 gün: tahmin ekranı hatırlatıcı özelliğinden etkilenmemeli.
+        assertTrue("forecast_days=7 olmali: $path", path.contains("forecast_days=7"))
         // Kıyafet önerisinin ihtiyaç duyduğu günlük alanlar istenmeli.
         assertTrue("uv_index_max eksik: $path", path.contains("uv_index_max"))
         assertTrue("wind_speed_10m_max eksik: $path", path.contains("wind_speed_10m_max"))

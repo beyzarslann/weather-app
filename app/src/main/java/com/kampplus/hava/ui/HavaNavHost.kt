@@ -2,6 +2,7 @@ package com.kampplus.hava.ui
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -24,9 +25,28 @@ import com.kampplus.hava.ui.forecast.ForecastViewModel
  * Parametreleri yol parçası (`forecast/{name}`) yerine sorgu parametresi olarak
  * taşıyoruz (`forecast?name=...`); çünkü değerler boş olabilir ve boş bir yol
  * parçası rotayı eşleşmez hâle getirir.
+ *
+ * @param deepLink Bildirimden gelen "şu şehri aç" isteği. Gelince tahmin ekranına gidilir
+ *   ve [onDeepLinkHandled] çağrılır; istek tüketilir ki ekran döndürülünce tekrar gidilmesin.
  */
 @Composable
-fun HavaNavHost(modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()) {
+fun HavaNavHost(
+    modifier: Modifier = Modifier,
+    navController: NavHostController = rememberNavController(),
+    deepLink: ForecastDeepLink? = null,
+    onDeepLinkHandled: () -> Unit = {}
+) {
+    LaunchedEffect(deepLink) {
+        deepLink ?: return@LaunchedEffect
+        navController.navigate(
+            forecastRoute(deepLink.name, deepLink.subtitle, deepLink.latitude, deepLink.longitude)
+        ) {
+            // Uygulama zaten bir tahmin ekranındaysa üst üste yığılmasın: listeye kadar geri sar.
+            popUpTo(CITY_ROUTE)
+        }
+        onDeepLinkHandled()
+    }
+
     NavHost(
         navController = navController,
         startDestination = CITY_ROUTE,
@@ -34,7 +54,10 @@ fun HavaNavHost(modifier: Modifier = Modifier, navController: NavHostController 
     ) {
         composable(CITY_ROUTE) {
             CityRoute(
-                onCityClick = { city -> navController.navigate(forecastRoute(city)) }
+                onCityClick = { city -> navController.navigate(forecastRoute(city)) },
+                onReminderClick = { reminder ->
+                    navController.navigate(forecastRoute(reminder.cityName, reminder.subtitle, reminder.latitude, reminder.longitude))
+                }
             )
         }
         composable(
@@ -77,10 +100,13 @@ private const val FORECAST_ROUTE =
  * `Uri.encode`: şehir adındaki boşluk ve Türkçe karakterler adreste sorun
  * çıkarmasın diye kaçışlanır ("Afyonkarahisar, Türkiye" → "Afyonkarahisar%2C%20T%C3%BCrkiye").
  */
-private fun forecastRoute(city: City): String = buildString {
+private fun forecastRoute(city: City): String = forecastRoute(city.name, city.subtitle, city.latitude, city.longitude)
+
+/** Aynı adres, ayrı değerlerle; bildirimden gelen istekte elimizde [City] nesnesi yoktur. */
+private fun forecastRoute(name: String, subtitle: String, latitude: Double, longitude: Double): String = buildString {
     append("forecast")
-    append("?name=").append(Uri.encode(city.name))
-    append("&subtitle=").append(Uri.encode(city.subtitle))
-    append("&latitude=").append(city.latitude)
-    append("&longitude=").append(city.longitude)
+    append("?name=").append(Uri.encode(name))
+    append("&subtitle=").append(Uri.encode(subtitle))
+    append("&latitude=").append(latitude)
+    append("&longitude=").append(longitude)
 }

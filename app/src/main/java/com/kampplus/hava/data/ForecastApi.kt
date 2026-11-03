@@ -45,6 +45,11 @@ interface ForecastApi {
         const val DAILY_FIELDS =
             "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max," +
                 "uv_index_max,wind_speed_10m_max"
+
+        /** Tahmin ekranının gösterdiği gün sayısı; varsayılan budur. */
         const val FORECAST_DAYS = 7
+
+        /** Open-Meteo'nun izin verdiği en uzun tahmin. Hatırlatıcı işi bunu ister. */
+        const val MAX_FORECAST_DAYS = 16
     }
 }

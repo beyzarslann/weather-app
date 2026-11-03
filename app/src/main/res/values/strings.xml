@@ -42,6 +42,30 @@
     <string name="outfit_title">Bugün ne giysem?</string>
     <!-- Ekran okuyucu için çip açıklaması, ör. "Önerilen: Şemsiye". -->
     <string name="outfit_item_description">Önerilen: %1$s</string>
+    <!--
+      Hava hatırlatıcısı bildirimleri. Bildirimin gövdesi (değişim ve akşam özeti)
+      kurallarla birlikte model paketinde üretilir; burada yalnızca başlıklar ve kanal var.
+    -->
+    <string name="reminder_channel_name">Hava hatırlatıcıları</string>
+    <string name="reminder_channel_description">Takip ettiğin günün tahmini değişince ve bir gün önce akşam haber verir.</string>
+    <string name="reminder_change_title">Tahmin değişti: %1$s</string>
+    <string name="reminder_eve_title">Yarın: %1$s</string>
+
+    <!-- Hatırlatıcı kurma (tahmin ekranı üst barı) -->
+    <string name="reminder_action_add">Hatırlatıcı kur</string>
+    <string name="reminder_action_active">Hatırlatıcı kurulu, yenisini ekle</string>
+    <string name="reminder_picker_title">Hangi gün için hatırlatayım?</string>
+    <string name="reminder_picker_confirm">Kur</string>
+    <string name="reminder_picker_cancel">Vazgeç</string>
+    <!-- %1$s = "Cumartesi, 14 Kasım" -->
+    <string name="reminder_created">%1$s için hatırlatıcı kuruldu</string>
+    <string name="reminder_permission_denied">Bildirim izni kapalı, ayarlardan açabilirsin</string>
+    <string name="reminder_open_settings">Ayarlar</string>
+
+    <!-- Hatırlatıcı listesi (arama ekranı, karşılama görünümü) -->
+    <string name="reminders_title">Hatırlatıcılarım</string>
+    <!-- Ekran okuyucu için sil düğmesi açıklaması; %1$s = şehir, %2$s = tarih. -->
+    <string name="reminder_delete">%1$s, %2$s hatırlatıcısını sil</string>
     <!-- Saatlik listenin ilk kartında saat yerine gösterilir. -->
     <string name="now">Şimdi</string>
     <!-- Başlıktaki bugünün sıcaklık aralığı. %1$d = en yüksek, %2$d = en düşük. -->

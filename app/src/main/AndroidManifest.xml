@@ -7,6 +7,12 @@
     -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      Bildirim izni (Android 13+). Burada bildirmek yetmez; kullanıcıdan çalışma anında
+      da istenir (arayüz adımında). İzin yoksa hatırlatıcı bildirimi sessizce atlanır.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -19,9 +25,14 @@
           android:exported="true" + LAUNCHER kategorisi: uygulamanın ana ekrandaki
           simgesine dokunulduğunda açılacak Activity budur.
         -->
+        <!--
+          singleTop: uygulama açıkken bildirime dokunulursa ikinci bir kopya açılmaz;
+          yeni istek mevcut Activity'nin onNewIntent'ine gelir.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

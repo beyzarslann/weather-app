@@ -2,21 +2,29 @@ package com.kampplus.hava.ui.city
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.google.gson.JsonSyntaxException
 import com.kampplus.hava.data.CityRepository
 import com.kampplus.hava.data.OpenMeteoCityRepository
 import com.kampplus.hava.model.City
+import com.kampplus.hava.model.WeatherReminder
+import com.kampplus.hava.reminder.ReminderService
 import com.kampplus.hava.ui.LoadState
 import java.io.IOException
+import java.time.LocalDate
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -33,13 +41,19 @@ import retrofit2.HttpException
  *
  * Ekran boş bir arama kutusuyla açılır ve [LoadState.Idle] durumunda bekler;
  * kullanıcı yazana ya da popüler şehirlerden birini seçene kadar istek atılmaz.
+ * Bu sırada karşılama görünümünde kurulu hatırlatıcılar listelenir.
  *
- * @param repository Varsayılanı gerçek servis. Testlerde sahte bir repository verilir.
- *   Tüm parametrelerin varsayılanı olduğu için Kotlin parametresiz bir kurucu da üretir;
- *   ekranlarda `viewModel()` bunu kullanabilir.
+ * Ekrandan [Factory] ile kurulur (hatırlatıcı servisi Context ister). Testlerde kurucu
+ * doğrudan, sahte repository ve servisle çağrılır.
+ *
+ * @param repository Şehir araması. Testlerde sahte bir repository verilir.
+ * @param reminderService Kurulu hatırlatıcılar ve silme.
+ * @param today Telefonun bugünü; geçmiş hatırlatıcıları listede göstermemek için.
  */
 class CityViewModel(
-    private val repository: CityRepository = OpenMeteoCityRepository()
+    private val repository: CityRepository,
+    private val reminderService: ReminderService,
+    private val today: () -> LocalDate = { LocalDate.now() }
 ) : ViewModel() {
 
     // State ViewModel'de MutableStateFlow ile tutulur.
@@ -56,8 +70,23 @@ class CityViewModel(
     /** En son aranan metin; aynı kelimeyi iki kez aramamak için. */
     private var lastSearchedQuery: String? = null
 
+    /**
+     * Karşılama görünümündeki "Hatırlatıcılarım" listesi.
+     *
+     * Günü geçmiş kayıtlar gösterilmez. Onları asıl silen arka plan işidir; ama iş en
+     * fazla günde bir çalıştığı için kullanıcı geçmiş bir tarihi bir gün daha görmesin.
+     */
+    val reminders: StateFlow<List<WeatherReminder>> = reminderService.reminders
+        .map { list -> list.filterNot { it.targetDate.isBefore(today()) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
     init {
         observeQuery()
+    }
+
+    /** "Hatırlatıcılarım" satırındaki sil ikonu. İşlerin iptali servisin içindedir. */
+    fun removeReminder(id: String) {
+        viewModelScope.launch { reminderService.remove(id) }
     }
 
     /**
@@ -156,13 +185,22 @@ class CityViewModel(
         _uiState.value = LoadState.Idle
     }
 
-    private companion object {
-        const val TAG = "CityViewModel"
+    companion object {
+        private const val TAG = "CityViewModel"
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        /** Uygulamanın kullandığı kurulum: gerçek arama servisi + Context'li hatırlatıcı servisi. */
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                val application = checkNotNull(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
+                CityViewModel(repository = OpenMeteoCityRepository(), reminderService = ReminderService(application))
+            }
+        }
 
         /** Son harften sonra aramadan önce beklenen süre. */
-        const val DEBOUNCE_MS = 400L
+        private const val DEBOUNCE_MS = 400L
 
         /** Bundan kısa metinlerle otomatik arama yapılmaz. */
-        const val MIN_QUERY_LENGTH = 2
+        private const val MIN_QUERY_LENGTH = 2
     }
 }

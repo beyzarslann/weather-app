@@ -1,11 +1,17 @@
 package com.kampplus.hava.ui.city
 
+import com.kampplus.hava.reminder.ReminderService
 import com.kampplus.hava.testing.FakeCityRepository
+import com.kampplus.hava.testing.FakeReminderRepository
+import com.kampplus.hava.testing.FakeReminderScheduler
 import com.kampplus.hava.testing.MainDispatcherRule
 import com.kampplus.hava.testing.sampleCity
+import com.kampplus.hava.testing.sampleReminder
 import com.kampplus.hava.ui.LoadState
 import java.io.IOException
+import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -33,8 +39,17 @@ class CityViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = FakeCityRepository()
+    private val reminderRepository = FakeReminderRepository()
+    private val scheduler = FakeReminderScheduler()
 
-    private fun createViewModel() = CityViewModel(repository)
+    /** Testlerde "bugün" sabit: 2 Kasım 2026. */
+    private val today = LocalDate.of(2026, 11, 2)
+
+    private fun createViewModel() = CityViewModel(
+        repository = repository,
+        reminderService = ReminderService(reminderRepository, scheduler),
+        today = { today }
+    )
 
     /** Kullanıcının bir şehir yazıp Enter'a basmasını taklit eder. */
     private fun TestScope.searchFor(viewModel: CityViewModel, query: String = "Ankara") {
@@ -263,5 +278,33 @@ class CityViewModelTest {
 
         assertTrue(viewModel.uiState.value is LoadState.Success)
         assertEquals(2, repository.callCount)
+    }
+
+    // --- Hatırlatıcılarım ----------------------------------------------------------------
+
+    @Test
+    fun `hatirlaticilar listelenir ve gunu gecmis olanlar gizlenir`() = runTest {
+        reminderRepository.add(sampleReminder(id = "past", targetDate = today.minusDays(1)))
+        reminderRepository.add(sampleReminder(id = "today", targetDate = today))
+        reminderRepository.add(sampleReminder(id = "future", targetDate = today.plusDays(5)))
+        val viewModel = createViewModel()
+
+        backgroundScope.launch { viewModel.reminders.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(listOf("today", "future"), viewModel.reminders.value.map { it.id })
+    }
+
+    @Test
+    fun `hatirlatici silinince isleri de iptal edilir`() = runTest {
+        reminderRepository.add(sampleReminder(id = "a"))
+        val viewModel = createViewModel()
+
+        viewModel.removeReminder("a")
+        advanceUntilIdle()
+
+        assertTrue(reminderRepository.items.isEmpty())
+        // Son hatırlatıcıydı: akşam planı ve günlük kontrol birlikte durur.
+        assertEquals(listOf("cancel-eve:a", "cancel-daily"), scheduler.calls)
     }
 }

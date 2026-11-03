@@ -1,12 +1,18 @@
 package com.kampplus.hava.ui.forecast
 
 import androidx.lifecycle.SavedStateHandle
+import com.kampplus.hava.reminder.ReminderService
+import com.kampplus.hava.testing.FakeReminderRepository
+import com.kampplus.hava.testing.FakeReminderScheduler
 import com.kampplus.hava.testing.FakeWeatherRepository
 import com.kampplus.hava.testing.MainDispatcherRule
 import com.kampplus.hava.testing.sampleForecast
+import com.kampplus.hava.testing.sampleReminder
 import com.kampplus.hava.ui.LoadState
 import java.io.IOException
+import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -30,6 +36,8 @@ class ForecastViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = FakeWeatherRepository()
+    private val reminderRepository = FakeReminderRepository()
+    private val scheduler = FakeReminderScheduler()
 
     private fun createViewModel(
         name: String = "Ankara",
@@ -45,7 +53,8 @@ class ForecastViewModelTest {
                 ForecastViewModel.ARG_LONGITUDE to longitude
             )
         ),
-        repository = repository
+        repository = repository,
+        reminderService = ReminderService(reminderRepository, scheduler)
     )
 
     /** Hazır tahminin yalnızca anlık sıcaklığı değiştirilmiş kopyası. */
@@ -208,5 +217,48 @@ class ForecastViewModelTest {
 
         // toDoubleOrNull() null dönünce 0.0 kullanılır; istek yine de yapılır.
         assertTrue(viewModel.uiState.value is LoadState.Success)
+    }
+
+    // --- Hatırlatıcı ---------------------------------------------------------------------
+
+    @Test
+    fun `hatirlatici ekrandaki sehir ve secilen gunle kaydedilir`() = runTest {
+        val viewModel = createViewModel()
+
+        viewModel.createReminder(LocalDate.of(2026, 11, 14))
+        advanceUntilIdle()
+
+        val saved = reminderRepository.items.single()
+        assertEquals("Ankara", saved.cityName)
+        assertEquals("Ankara, Türkiye", saved.subtitle)
+        assertEquals(39.91987, saved.latitude, 1e-9)
+        assertEquals(32.85427, saved.longitude, 1e-9)
+        assertEquals(LocalDate.of(2026, 11, 14), saved.targetDate)
+        // İlk özet arka plan işinin ilk kontrolünde alınır; kurulurken boştur.
+        assertNull(saved.lastSnapshot)
+        assertEquals(listOf("daily", "check-soon", "eve:${saved.id}"), scheduler.calls)
+    }
+
+    @Test
+    fun `bu sehir icin hatirlatici varsa zil dolu`() = runTest {
+        reminderRepository.add(sampleReminder().copy(latitude = 39.91987, longitude = 32.85427))
+        val viewModel = createViewModel()
+
+        // stateIn(WhileSubscribed): değer ancak biri dinlerken akar; ekranın yerine biz dinliyoruz.
+        backgroundScope.launch { viewModel.hasReminder.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(viewModel.hasReminder.value)
+    }
+
+    @Test
+    fun `baska sehrin hatirlaticisi zili doldurmaz`() = runTest {
+        reminderRepository.add(sampleReminder().copy(cityName = "Trabzon", latitude = 41.0, longitude = 39.72))
+        val viewModel = createViewModel()
+
+        backgroundScope.launch { viewModel.hasReminder.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.hasReminder.value)
     }
 }

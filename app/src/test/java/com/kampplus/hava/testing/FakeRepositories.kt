@@ -58,8 +58,13 @@ class FakeWeatherRepository(
     var callCount: Int = 0
         private set
 
-    override suspend fun getForecast(latitude: Double, longitude: Double): Forecast {
+    /** Son istekte kaç günlük tahmin istendiği; hatırlatıcının 16 gün istediğini doğrulamak için. */
+    var lastForecastDays: Int? = null
+        private set
+
+    override suspend fun getForecast(latitude: Double, longitude: Double, forecastDays: Int): Forecast {
         callCount++
+        lastForecastDays = forecastDays
         if (delayMs > 0) delay(delayMs)
         error?.let { throw it }
         return result

@@ -64,8 +64,10 @@ object OutfitAdvisor {
      *
      * @param today Bugünün günlük tahmini (en düşük/en yüksek, yağış, UV, rüzgâr).
      * @param current Anlık durum; yalnızca hissedilen sıcaklık farkı için kullanılır.
+     *   Başka bir gün için öneri üretilirken (ör. hatırlatıcının "yarın" bildirimi) null verilir:
+     *   bugünün rüzgârı yarının hissedilen sıcaklığını söylemez.
      */
-    fun advise(today: DailyForecast, current: CurrentWeather): OutfitAdvice {
+    fun advise(today: DailyForecast, current: CurrentWeather?): OutfitAdvice {
         val effective = effectiveTemperature(today, current)
         val band = TemperatureBand.of(effective)
 
@@ -110,14 +112,14 @@ object OutfitAdvisor {
      * Kararların dayandığı sıcaklık: günün ortalaması, hissedilen daha soğuksa o kadar aşağı.
      * Bantlar tam sayı olarak tanımlı olduğu için sonuç yuvarlanır (8,4° → 8, 8,5° → 9).
      */
-    internal fun effectiveTemperature(today: DailyForecast, current: CurrentWeather): Int {
+    internal fun effectiveTemperature(today: DailyForecast, current: CurrentWeather?): Int {
         val average = (today.minTemperatureC + today.maxTemperatureC) / 2
         return (average - feelsColderBy(current)).roundToInt()
     }
 
-    /** Hissedilen sıcaklık gerçeğinden kaç derece düşük? Daha sıcak ya da bilinmiyorsa 0. */
-    private fun feelsColderBy(current: CurrentWeather): Double {
-        val apparent = current.apparentTemperatureC ?: return 0.0
+    /** Hissedilen sıcaklık gerçeğinden kaç derece düşük? Daha sıcak, bilinmiyor ya da anlık durum yoksa 0. */
+    private fun feelsColderBy(current: CurrentWeather?): Double {
+        val apparent = current?.apparentTemperatureC ?: return 0.0
         return (current.temperatureC - apparent).coerceAtLeast(0.0)
     }
 
@@ -127,7 +129,7 @@ object OutfitAdvisor {
      * Gün içi fark büyükse sabahtan öğleye değişimi anlatırız ("Gün serin başlayıp ılınıyor").
      * Değilse günü tek kelimeyle niteleriz ("Serin bir gün").
      */
-    private fun opening(today: DailyForecast, effective: Int, current: CurrentWeather): String {
+    private fun opening(today: DailyForecast, effective: Int, current: CurrentWeather?): String {
         val spread = today.maxTemperatureC - today.minTemperatureC
         val morning = TemperatureBand.of(today.minTemperatureC.roundToInt())
         val afternoon = TemperatureBand.of(today.maxTemperatureC.roundToInt())
