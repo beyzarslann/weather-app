@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -61,13 +61,15 @@ import com.kampplus.hava.model.Forecast
 import com.kampplus.hava.model.HourlyForecast
 import com.kampplus.hava.model.OutfitAdvisor
 import com.kampplus.hava.model.WeatherCondition
+import com.kampplus.hava.model.currentHourOf
+import com.kampplus.hava.model.todayAt
+import com.kampplus.hava.model.upcomingFrom
 import com.kampplus.hava.ui.LoadState
 import com.kampplus.hava.ui.component.ErrorView
 import com.kampplus.hava.ui.theme.HavaTheme
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -220,7 +222,8 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
             .padding(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        val today = forecast.daily.firstOrNull()
+        // "Bugün" şehrin bugünüdür; telefonun tarihi değil (bkz. todayAt).
+        val today = forecast.daily.todayAt(forecast.current.observedAt)
         // Öneri yalnızca tahmin değişince yeniden hesaplanır, her yeniden çizimde değil.
         // Günlük liste boşsa "günün geneli" bilinmez; kart hiç gösterilmez.
         val outfit = remember(forecast) { today?.let { OutfitAdvisor.advise(it, forecast.current) } }
@@ -230,7 +233,7 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
         outfit?.let { OutfitCard(advice = it, modifier = sideBySide) }
         CurrentMetricsCard(current = forecast.current, modifier = sideBySide)
         SectionTitle(stringResource(R.string.detail_hourly))
-        HourlyRow(hours = forecast.hourly)
+        HourlyRow(hours = forecast.hourly, observedAt = forecast.current.observedAt)
         SectionTitle(stringResource(R.string.detail_daily))
         // Tüm satırların çubukları aynı ölçeği paylaşsın diye haftanın uç değerleri bir kez hesaplanır.
         // Liste boşsa döngü hiç çalışmaz; 0.0 yalnızca derleyiciyi memnun etmek için.
@@ -240,7 +243,8 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
             forecast.daily.forEachIndexed { index, day ->
                 // İlk satır hariç her satırın üstüne ayırıcı çizgi.
                 if (index > 0) HorizontalDivider()
-                DailyRow(day = day, isToday = index == 0, weekMin = weekMin, weekMax = weekMax)
+                // Başlık ve kıyafet önerisi hangi günü "bugün" saydıysa liste de onu işaretler.
+                DailyRow(day = day, isToday = day == today, weekMin = weekMin, weekMax = weekMax)
             }
         }
     }
@@ -324,21 +328,23 @@ private fun CurrentMetricsCard(current: CurrentWeather, modifier: Modifier = Mod
 /**
  * Önümüzdeki 24 saat, yatay kaydırılabilir kartlar hâlinde.
  *
- * Servis günün başından itibaren veri gönderir; geçmiş saatleri gizlemek için
- * şu anki saatten öncekiler elenir.
+ * "Şu an" telefonun saatinden değil, servisin gözlem zamanından ([observedAt]) gelir:
+ * saatlik veriler şehrin yerel saatindedir, telefon ise başka bir saat diliminde olabilir.
+ * Geçmiş saatler elenir (bkz. [upcomingFrom]).
  */
 @Composable
-private fun HourlyRow(hours: List<HourlyForecast>, modifier: Modifier = Modifier) {
-    val now = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS)
-    val upcoming = hours.filter { !it.time.isBefore(now) }.take(HOURLY_COUNT)
+private fun HourlyRow(hours: List<HourlyForecast>, observedAt: LocalDateTime, modifier: Modifier = Modifier) {
+    val currentHour = currentHourOf(observedAt)
+    val upcoming = remember(hours, observedAt) { hours.upcomingFrom(observedAt, HOURLY_COUNT) }
     LazyRow(
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        itemsIndexed(items = upcoming, key = { _, hour -> hour.time.toString() }) { index, hour ->
-            // Liste şu anki saatten başladığı için ilk kart "şimdi"yi temsil eder.
-            val isNow = index == 0
+        items(items = upcoming, key = { it.time.toString() }) { hour ->
+            // "Şimdi" sıraya göre değil saate göre belirlenir: içinde bulunulan saatin kaydı
+            // servisten eksik gelirse bir sonraki saat yanlışlıkla "Şimdi" diye etiketlenmesin.
+            val isNow = hour.time == currentHour
             // "Şimdi" kartı tema rengiyle öne çıkar; diğerleri yarı saydam kalır.
             val colors = if (isNow) {
                 CardDefaults.cardColors(
@@ -537,7 +543,8 @@ private fun ForecastScreenPreview() {
                     ),
                     hourly = List(8) {
                         HourlyForecast(
-                            time = LocalDateTime.now().plusHours(it.toLong()),
+                            // Gözlem saatinden başlar; liste artık telefonun saatine değil buna göre süzülüyor.
+                            time = LocalDateTime.of(2026, 1, 15, 14, 0).plusHours(it.toLong()),
                             temperatureC = 18.0 + it,
                             weatherCode = 2,
                             precipitationProbability = it * 5
