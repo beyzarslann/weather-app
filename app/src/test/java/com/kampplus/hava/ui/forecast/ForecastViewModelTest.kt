@@ -3,12 +3,16 @@ package com.kampplus.hava.ui.forecast
 import androidx.lifecycle.SavedStateHandle
 import com.kampplus.hava.testing.FakeWeatherRepository
 import com.kampplus.hava.testing.MainDispatcherRule
+import com.kampplus.hava.testing.sampleForecast
 import com.kampplus.hava.ui.LoadState
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -43,6 +47,14 @@ class ForecastViewModelTest {
         ),
         repository = repository
     )
+
+    /** Hazır tahminin yalnızca anlık sıcaklığı değiştirilmiş kopyası. */
+    private fun forecastWithTemperature(celsius: Double) = sampleForecast().let {
+        it.copy(current = it.current.copy(temperatureC = celsius))
+    }
+
+    /** Ekrandaki anlık sıcaklık; durum Success değilse test burada patlar (bu da istenen). */
+    private fun currentTemperature(viewModel: ForecastViewModel) = (viewModel.uiState.value as LoadState.Success).data.current.temperatureC
 
     @Test
     fun `rota parametreleri okunur`() {
@@ -106,6 +118,87 @@ class ForecastViewModelTest {
 
         assertTrue(viewModel.uiState.value is LoadState.Success)
         assertEquals(2, repository.callCount)
+    }
+
+    @Test
+    fun `yenileme sirasinda eski veri ekranda kalir ve sonra guncellenir`() = runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Servis bu kez farklı bir sıcaklık dönecek ve biraz bekletecek.
+        repository.result = forecastWithTemperature(25.0)
+        repository.delayMs = 1_000
+        viewModel.refresh()
+        runCurrent()
+
+        // Yenileme sürüyor: gösterge dönüyor ama ekran Loading'e düşmedi, eski veri duruyor.
+        assertTrue(viewModel.isRefreshing.value)
+        assertEquals(21.0, currentTemperature(viewModel), 0.01)
+
+        advanceUntilIdle()
+
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals(25.0, currentTemperature(viewModel), 0.01)
+        assertNull(viewModel.refreshMessage.value)
+    }
+
+    @Test
+    fun `yenileme basarisiz olursa eski veri korunur ve mesaj gosterilir`() = runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        repository.error = IOException("no network")
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        // Hata ekranı yok; eski tahmin yerinde.
+        assertEquals(21.0, currentTemperature(viewModel), 0.01)
+        assertFalse(viewModel.isRefreshing.value)
+        assertEquals("Güncellenemedi. İnternet bağlantını kontrol et.", viewModel.refreshMessage.value)
+    }
+
+    @Test
+    fun `gosterilen mesaj temizlenir`() = runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        repository.error = IOException("no network")
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        viewModel.onRefreshMessageShown()
+
+        // Ekran döndürülse bile aynı Snackbar ikinci kez çıkmaz.
+        assertNull(viewModel.refreshMessage.value)
+    }
+
+    @Test
+    fun `yenileme surerken tekrar cekmek yeni istek atmaz`() = runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        repository.delayMs = 1_000
+        viewModel.refresh()
+        runCurrent()
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        // İlk yükleme + tek yenileme.
+        assertEquals(2, repository.callCount)
+    }
+
+    @Test
+    fun `hata ekranindayken yenileme normal yukleme yapar`() = runTest {
+        repository.error = IOException("no network")
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Korunacak veri yok: Loading → Success akışı izlenir, Snackbar çıkmaz.
+        repository.error = null
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is LoadState.Success)
+        assertNull(viewModel.refreshMessage.value)
     }
 
     @Test

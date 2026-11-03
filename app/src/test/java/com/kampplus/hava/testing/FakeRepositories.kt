@@ -45,10 +45,14 @@ class FakeCityRepository(
     }
 }
 
-/** @param error Doluysa [getForecast] bu hatayı fırlatır. */
+/**
+ * @param error Doluysa [getForecast] bu hatayı fırlatır.
+ * @param delayMs Cevaptan önce beklenecek sanal süre; "yenileme sürerken" anını yakalamak için.
+ */
 class FakeWeatherRepository(
     var result: Forecast = sampleForecast(),
-    var error: Throwable? = null
+    var error: Throwable? = null,
+    var delayMs: Long = 0L
 ) : WeatherRepository {
 
     var callCount: Int = 0
@@ -56,6 +60,7 @@ class FakeWeatherRepository(
 
     override suspend fun getForecast(latitude: Double, longitude: Double): Forecast {
         callCount++
+        if (delayMs > 0) delay(delayMs)
         error?.let { throw it }
         return result
     }

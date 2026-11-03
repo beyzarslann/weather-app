@@ -28,11 +28,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -72,6 +77,8 @@ import kotlin.math.roundToInt
 @Composable
 fun ForecastRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: ForecastViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val refreshMessage by viewModel.refreshMessage.collectAsStateWithLifecycle()
 
     ForecastScreen(
         cityName = viewModel.cityName,
@@ -79,7 +86,11 @@ fun ForecastRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: 
         uiState = uiState,
         onBack = onBack,
         onRetry = viewModel::onRetry,
-        modifier = modifier
+        modifier = modifier,
+        isRefreshing = isRefreshing,
+        refreshMessage = refreshMessage,
+        onRefresh = viewModel::refresh,
+        onRefreshMessageShown = viewModel::onRefreshMessageShown
     )
 }
 
@@ -87,7 +98,11 @@ fun ForecastRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: 
  * Bir şehrin hava tahmini.
  *
  * Üç bölüm: anlık durum başlığı, saatlik yatay liste, günlük dikey liste.
- * Dört durumun tamamı burada da karşılanır.
+ * Dört durumun tamamı burada da karşılanır. İçerik aşağı çekilerek yenilenebilir.
+ *
+ * @param isRefreshing Yenileme sürüyorsa üstte gösterge döner; içerik yerinde kalır.
+ * @param refreshMessage Yenileme başarısız olunca Snackbar'da gösterilecek metin.
+ * @param onRefreshMessageShown Snackbar gösterildikten sonra çağrılır; mesaj temizlensin diye.
  */
 @Composable
 fun ForecastScreen(
@@ -96,7 +111,11 @@ fun ForecastScreen(
     uiState: LoadState<Forecast>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isRefreshing: Boolean = false,
+    refreshMessage: String? = null,
+    onRefresh: () -> Unit = {},
+    onRefreshMessageShown: () -> Unit = {}
 ) {
     val condition = (uiState as? LoadState.Success)?.data?.current?.let {
         WeatherCondition.fromWeatherCode(it.weatherCode)
@@ -106,17 +125,53 @@ fun ForecastScreen(
     // Efektler Scaffold'un altında kaldığı için kartlar ve yazılar her zaman üstte durur.
     Box(modifier = modifier.background(weatherBackground(condition))) {
         WeatherEffects(condition = condition)
-        ForecastScaffold(cityName = cityName, subtitle = subtitle, uiState = uiState, onBack = onBack, onRetry = onRetry)
+        ForecastScaffold(
+            cityName = cityName,
+            subtitle = subtitle,
+            uiState = uiState,
+            isRefreshing = isRefreshing,
+            refreshMessage = refreshMessage,
+            onBack = onBack,
+            onRetry = onRetry,
+            onRefresh = onRefresh,
+            onRefreshMessageShown = onRefreshMessageShown
+        )
     }
 }
 
-/** Üst bar ve dört durumun içeriği. Arka planı şeffaftır; altındaki katmanlar görünür. */
+/**
+ * Üst bar, Snackbar ve dört durumun içeriği. Arka planı şeffaftır; altındaki katmanlar görünür.
+ *
+ * İçerik `PullToRefreshBox` ile sarılıdır: kaydırılabilir içerik en üstteyken aşağı
+ * çekilince [onRefresh] çağrılır. Gösterge [isRefreshing] true olduğu sürece döner.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ForecastScaffold(cityName: String, subtitle: String, uiState: LoadState<Forecast>, onBack: () -> Unit, onRetry: () -> Unit) {
+private fun ForecastScaffold(
+    cityName: String,
+    subtitle: String,
+    uiState: LoadState<Forecast>,
+    isRefreshing: Boolean,
+    refreshMessage: String?,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onRefresh: () -> Unit,
+    onRefreshMessageShown: () -> Unit
+) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    // Yeni bir mesaj gelince bir kez gösterilir. showSnackbar Snackbar kapanana kadar bekler;
+    // ardından ViewModel'e haber verip mesajı temizletiriz ki tekrar gösterilmesin.
+    LaunchedEffect(refreshMessage) {
+        refreshMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            onRefreshMessageShown()
+        }
+    }
+
     Scaffold(
         // Scaffold ve üst bar kendi düz rengini çizmesin ki gradient ve efektler görünsün.
         containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -132,7 +187,11 @@ private fun ForecastScaffold(cityName: String, subtitle: String, uiState: LoadSt
             )
         }
     ) { innerPadding ->
-        Box(
+        // Yalnızca Success içeriği kaydırılabilir olduğu için çekme hareketi orada çalışır.
+        // Hata ekranında zaten "Tekrar dene" düğmesi var.
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
