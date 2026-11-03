@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -33,9 +35,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kampplus.hava.R
@@ -141,12 +145,13 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
         CurrentWeatherHeader(
             subtitle = subtitle,
             current = forecast.current,
+            today = forecast.daily.firstOrNull(),
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         SectionTitle(stringResource(R.string.detail_hourly))
         HourlyRow(hours = forecast.hourly)
         SectionTitle(stringResource(R.string.detail_daily))
-        Card(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Card(modifier = Modifier.padding(horizontal = 16.dp), colors = translucentCardColors()) {
             forecast.daily.forEachIndexed { index, day ->
                 // İlk satır hariç her satırın üstüne ayırıcı çizgi.
                 if (index > 0) HorizontalDivider()
@@ -156,27 +161,56 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
     }
 }
 
-/** Büyük sıcaklık + durum etiketi + hissedilen/nem/rüzgâr üçlüsü. */
+/**
+ * Ortalanmış dikey başlık: şehir → emoji → büyük sıcaklık → durum →
+ * bugünün en yüksek/en düşüğü; en altta hissedilen/nem/rüzgâr kartı.
+ */
 @Composable
-private fun CurrentWeatherHeader(subtitle: String, current: CurrentWeather, modifier: Modifier = Modifier) {
+private fun CurrentWeatherHeader(subtitle: String, current: CurrentWeather, today: DailyForecast?, modifier: Modifier = Modifier) {
     val condition = WeatherCondition.fromWeatherCode(current.weatherCode)
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(text = condition.emoji, style = MaterialTheme.typography.displayMedium)
-            Column {
-                Text(text = degrees(current.temperatureC), style = MaterialTheme.typography.displaySmall)
-                Text(text = condition.label, style = MaterialTheme.typography.titleMedium)
-            }
+        Text(
+            text = condition.emoji,
+            style = MaterialTheme.typography.displayMedium,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Text(
+            text = degrees(current.temperatureC),
+            style = MaterialTheme.typography.displayLarge.copy(
+                fontSize = 96.sp,
+                lineHeight = 96.sp,
+                fontWeight = FontWeight.Light
+            )
+        )
+        Text(text = condition.label, style = MaterialTheme.typography.titleMedium)
+        // Günlük liste boş gelebilir; o zaman satırı hiç çizmiyoruz.
+        today?.let {
+            Text(
+                text = stringResource(
+                    R.string.detail_high_low,
+                    it.maxTemperatureC.roundToInt(),
+                    it.minTemperatureC.roundToInt()
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            colors = translucentCardColors()
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -213,8 +247,19 @@ private fun HourlyRow(hours: List<HourlyForecast>, modifier: Modifier = Modifier
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(items = upcoming, key = { it.time.toString() }) { hour ->
-            Card(modifier = Modifier.width(76.dp)) {
+        itemsIndexed(items = upcoming, key = { _, hour -> hour.time.toString() }) { index, hour ->
+            // Liste şu anki saatten başladığı için ilk kart "şimdi"yi temsil eder.
+            val isNow = index == 0
+            // "Şimdi" kartı tema rengiyle öne çıkar; diğerleri yarı saydam kalır.
+            val colors = if (isNow) {
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            } else {
+                translucentCardColors()
+            }
+            Card(modifier = Modifier.width(76.dp), colors = colors) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -222,7 +267,10 @@ private fun HourlyRow(hours: List<HourlyForecast>, modifier: Modifier = Modifier
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(text = hour.time.format(HOUR_FORMAT), style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = if (isNow) stringResource(R.string.now) else hour.time.format(HOUR_FORMAT),
+                        style = MaterialTheme.typography.labelMedium
+                    )
                     Text(
                         text = WeatherCondition.fromWeatherCode(hour.weatherCode).emoji,
                         style = MaterialTheme.typography.titleLarge
@@ -232,7 +280,8 @@ private fun HourlyRow(hours: List<HourlyForecast>, modifier: Modifier = Modifier
                         // Boş string yerine boşluk: kartların yüksekliği eşit kalsın.
                         text = percent(hour.precipitationProbability) ?: " ",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        // primary renk primaryContainer zemininde soluk kalır; orada kartın yazı rengi kullanılır.
+                        color = if (isNow) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -303,6 +352,18 @@ private fun SectionTitle(text: String) {
     )
 }
 
+/**
+ * Tahmin ekranındaki tüm kartların ortak zemini.
+ *
+ * Arka plan hava durumuna göre gradient; opak kartlar onu örtüyordu.
+ * Yüzey rengini %55 opaklıkla kullanınca gradient kartların içinden de
+ * hissedilir, yazılar ise okunaklı kalır. Oranı değiştirmek için tek yer burası.
+ */
+@Composable
+private fun translucentCardColors(): CardColors = CardDefaults.cardColors(
+    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = CARD_ALPHA)
+)
+
 /** 18.4 → "18°". Kullanıcıya ondalık göstermeye gerek yok. */
 private fun degrees(celsius: Double) = "${celsius.roundToInt()}°"
 
@@ -310,6 +371,7 @@ private fun degrees(celsius: Double) = "${celsius.roundToInt()}°"
 private fun percent(value: Int?) = value?.takeIf { it > 0 }?.let { "%$it" }
 
 private const val HOURLY_COUNT = 24
+private const val CARD_ALPHA = 0.55f
 private val HOUR_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE", Locale.forLanguageTag("tr"))
 
