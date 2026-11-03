@@ -1,5 +1,6 @@
 package com.kampplus.hava.ui.forecast
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -33,10 +35,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -151,11 +158,15 @@ private fun ForecastContent(subtitle: String, forecast: Forecast, modifier: Modi
         SectionTitle(stringResource(R.string.detail_hourly))
         HourlyRow(hours = forecast.hourly)
         SectionTitle(stringResource(R.string.detail_daily))
+        // Tüm satırların çubukları aynı ölçeği paylaşsın diye haftanın uç değerleri bir kez hesaplanır.
+        // Liste boşsa döngü hiç çalışmaz; 0.0 yalnızca derleyiciyi memnun etmek için.
+        val weekMin = forecast.daily.minOfOrNull { it.minTemperatureC } ?: 0.0
+        val weekMax = forecast.daily.maxOfOrNull { it.maxTemperatureC } ?: 0.0
         Card(modifier = Modifier.padding(horizontal = 16.dp), colors = translucentCardColors()) {
             forecast.daily.forEachIndexed { index, day ->
                 // İlk satır hariç her satırın üstüne ayırıcı çizgi.
                 if (index > 0) HorizontalDivider()
-                DailyRow(day = day, isToday = index == 0)
+                DailyRow(day = day, isToday = index == 0, weekMin = weekMin, weekMax = weekMax)
             }
         }
     }
@@ -289,9 +300,14 @@ private fun HourlyRow(hours: List<HourlyForecast>, modifier: Modifier = Modifier
     }
 }
 
-/** Günlük tahmin satırı: gün adı · yağış · emoji · en düşük / en yüksek. */
+/**
+ * Günlük tahmin satırı: gün adı · emoji · yağış · en düşük · aralık çubuğu · en yüksek.
+ *
+ * [weekMin] ve [weekMax] çubuğun ölçeğidir; tüm satırlara aynı değerler geçilir ki
+ * çubuklar alt alta karşılaştırılabilsin.
+ */
 @Composable
-private fun DailyRow(day: DailyForecast, isToday: Boolean, modifier: Modifier = Modifier) {
+private fun DailyRow(day: DailyForecast, isToday: Boolean, weekMin: Double, weekMax: Double, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -301,32 +317,77 @@ private fun DailyRow(day: DailyForecast, isToday: Boolean, modifier: Modifier = 
         Text(
             text = if (isToday) stringResource(R.string.today) else day.date.format(DAY_FORMAT).replaceFirstChar(Char::titlecase),
             style = MaterialTheme.typography.bodyLarge,
+            // "Çarşamba" gibi uzun adlar dar ekranda satırı kaydırmasın; sığmazsa "..." ile kısalır.
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = WeatherCondition.fromWeatherCode(day.weatherCode).emoji,
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 8.dp)
         )
         Text(
             text = percent(day.precipitationProbability).orEmpty(),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.width(44.dp),
+            modifier = Modifier.width(36.dp),
             textAlign = TextAlign.End
-        )
-        Text(
-            text = WeatherCondition.fromWeatherCode(day.weatherCode).emoji,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = 12.dp)
         )
         Text(
             text = degrees(day.minTemperatureC),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(44.dp),
+            modifier = Modifier.width(40.dp),
             textAlign = TextAlign.End
+        )
+        TemperatureRangeBar(
+            dayMin = day.minTemperatureC,
+            dayMax = day.maxTemperatureC,
+            weekMin = weekMin,
+            weekMax = weekMax,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp)
         )
         Text(
             text = degrees(day.maxTemperatureC),
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.width(44.dp),
+            modifier = Modifier.width(36.dp),
             textAlign = TextAlign.End
+        )
+    }
+}
+
+/**
+ * Bir günün sıcaklık aralığını haftanın ölçeğinde gösteren yatay çubuk.
+ *
+ * Gri iz haftanın en düşüğünden en yükseğine uzanır; renkli kısım o günün
+ * aralığıdır. Gradient tüm ize yayılır; böylece sıcak bir günün parçası
+ * turuncu, soğuk bir günün parçası mavi tarafta kalır ve renk sıcaklığı anlatır.
+ */
+@Composable
+private fun TemperatureRangeBar(dayMin: Double, dayMax: Double, weekMin: Double, weekMax: Double, modifier: Modifier = Modifier) {
+    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+    Canvas(modifier = modifier.height(6.dp)) {
+        // Haftanın tüm günleri aynı sıcaklıktaysa sıfıra bölmemek için en az 1 derece.
+        val span = (weekMax - weekMin).coerceAtLeast(1.0)
+        var start = ((dayMin - weekMin) / span).toFloat()
+        var end = ((dayMax - weekMin) / span).toFloat()
+        // Çok dar aralıklar neredeyse görünmez; en az %4 genişlik verip ortasından büyütüyoruz.
+        if (end - start < MIN_BAR_FRACTION) {
+            val center = (start + end) / 2f
+            start = (center - MIN_BAR_FRACTION / 2f).coerceIn(0f, 1f - MIN_BAR_FRACTION)
+            end = start + MIN_BAR_FRACTION
+        }
+
+        val radius = CornerRadius(size.height / 2f)
+        drawRoundRect(color = trackColor, cornerRadius = radius)
+        drawRoundRect(
+            brush = Brush.horizontalGradient(colors = RANGE_GRADIENT, startX = 0f, endX = size.width),
+            topLeft = Offset(x = size.width * start, y = 0f),
+            size = Size(width = size.width * (end - start), height = size.height),
+            cornerRadius = radius
         )
     }
 }
@@ -372,6 +433,10 @@ private fun percent(value: Int?) = value?.takeIf { it > 0 }?.let { "%$it" }
 
 private const val HOURLY_COUNT = 24
 private const val CARD_ALPHA = 0.55f
+private const val MIN_BAR_FRACTION = 0.04f
+
+/** Soğuktan sıcağa: açık mavi → turuncu. */
+private val RANGE_GRADIENT = listOf(Color(0xFF4FC3F7), Color(0xFFFFB74D))
 private val HOUR_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE", Locale.forLanguageTag("tr"))
 
