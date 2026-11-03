@@ -261,4 +261,16 @@ class ForecastViewModelTest {
 
         assertFalse(viewModel.hasReminder.value)
     }
+
+    @Test
+    fun `debug calistirma yalnizca bu sehrin aksam ozetini tetikler`() = runTest {
+        reminderRepository.add(sampleReminder(id = "here").copy(latitude = 39.91987, longitude = 32.85427))
+        reminderRepository.add(sampleReminder(id = "other").copy(latitude = 41.0, longitude = 39.72))
+        val viewModel = createViewModel()
+
+        viewModel.runRemindersNowForDebug()
+        advanceUntilIdle()
+
+        assertEquals(listOf("check-soon", "eve-now:here"), scheduler.calls)
+    }
 }

@@ -38,6 +38,16 @@ class ReminderService(
         scheduler.scheduleEve(reminder)
     }
 
+    /**
+     * Yalnızca debug: günlük kontrolü ve verilen hatırlatıcıların akşam özetini hemen çalıştırır.
+     * Akşam özeti hedef güne bakmadan gönderilir; bildirim görünümünü ve dokununca açılan
+     * ekranı denemenin en hızlı yolu budur.
+     */
+    fun runNowForDebug(eveReminderIds: List<String>) {
+        scheduler.checkSoon()
+        eveReminderIds.forEach(scheduler::sendEveNow)
+    }
+
     /** Hatırlatıcıyı siler; son hatırlatıcıysa günlük kontrol de durur. */
     suspend fun remove(id: String) {
         repository.remove(id)

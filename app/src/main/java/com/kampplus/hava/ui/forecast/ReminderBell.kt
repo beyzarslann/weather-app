@@ -8,7 +8,11 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
@@ -16,13 +20,13 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,9 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -59,6 +66,7 @@ import kotlinx.coroutines.launch
  * @param hasReminder Bu şehir için kurulu hatırlatıcı varsa zil dolu çizilir.
  * @param cityToday Şehrin bugünü; seçilebilir tarihler buna göre hesaplanır.
  * @param onCreateReminder Seçilen gün için hatırlatıcıyı kaydeder.
+ * @param onDebugRunNow Yalnızca debug derlemesinde dolu: zile uzun basınca işleri hemen çalıştırır.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +74,8 @@ internal fun ReminderBell(
     hasReminder: Boolean,
     cityToday: LocalDate,
     snackbarHostState: SnackbarHostState,
-    onCreateReminder: (LocalDate) -> Unit
+    onCreateReminder: (LocalDate) -> Unit,
+    onDebugRunNow: (() -> Unit)?
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -110,7 +119,26 @@ internal fun ReminderBell(
     }
 
     val description = stringResource(if (hasReminder) R.string.reminder_action_active else R.string.reminder_action_add)
-    IconButton(onClick = { showPicker = true }) {
+    // IconButton uzun basmayı desteklemez; aynı görünümü combinedClickable ile kuruyoruz.
+    // minimumInteractiveComponentSize: dokunma alanı en az 48 dp olsun (erişilebilirlik).
+    Box(
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(40.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = description,
+                onClick = { showPicker = true },
+                onLongClick = onDebugRunNow?.let { run ->
+                    {
+                        run()
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.reminder_debug_started)) }
+                    }
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
         Icon(
             imageVector = if (hasReminder) Icons.Filled.Notifications else Icons.Outlined.Notifications,
             contentDescription = description

@@ -61,6 +61,8 @@
     <string name="reminder_created">%1$s için hatırlatıcı kuruldu</string>
     <string name="reminder_permission_denied">Bildirim izni kapalı, ayarlardan açabilirsin</string>
     <string name="reminder_open_settings">Ayarlar</string>
+    <!-- Yalnızca debug derlemesinde, zile uzun basınca. -->
+    <string name="reminder_debug_started">Hatırlatıcı kontrolü ve akşam özeti şimdi çalıştırıldı</string>
 
     <!-- Hatırlatıcı listesi (arama ekranı, karşılama görünümü) -->
     <string name="reminders_title">Hatırlatıcılarım</string>

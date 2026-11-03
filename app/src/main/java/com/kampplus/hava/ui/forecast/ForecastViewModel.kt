@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -112,6 +113,17 @@ class ForecastViewModel(
             targetDate = date
         )
         viewModelScope.launch { reminderService.add(reminder) }
+    }
+
+    /**
+     * Yalnızca debug derlemesinde: hatırlatıcı kontrolünü ve bu şehrin akşam özetlerini
+     * hemen çalıştırır; 24 saat ya da akşam 20:00 beklemeden bildirim denenebilir.
+     */
+    fun runRemindersNowForDebug() {
+        viewModelScope.launch {
+            val ids = reminderService.reminders.first().filter(::isThisCity).map { it.id }
+            reminderService.runNowForDebug(eveReminderIds = ids)
+        }
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.kampplus.hava.ui.forecast
 
+import android.content.pm.ApplicationInfo
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +46,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -88,6 +90,11 @@ fun ForecastRoute(
     val refreshMessage by viewModel.refreshMessage.collectAsStateWithLifecycle()
     val hasReminder by viewModel.hasReminder.collectAsStateWithLifecycle()
 
+    // Debug derlemesi mi? BuildConfig'i açmak yerine uygulamanın "debuggable" bayrağına bakıyoruz;
+    // release derlemesinde bu bayrak her zaman kapalıdır.
+    val context = LocalContext.current
+    val isDebugBuild = remember(context) { context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 }
+
     ForecastScreen(
         cityName = viewModel.cityName,
         subtitle = viewModel.subtitle,
@@ -100,7 +107,8 @@ fun ForecastRoute(
         onRefresh = viewModel::refresh,
         onRefreshMessageShown = viewModel::onRefreshMessageShown,
         hasReminder = hasReminder,
-        onCreateReminder = viewModel::createReminder
+        onCreateReminder = viewModel::createReminder,
+        onDebugRunReminders = if (isDebugBuild) viewModel::runRemindersNowForDebug else null
     )
 }
 
@@ -115,6 +123,7 @@ fun ForecastRoute(
  * @param onRefreshMessageShown Snackbar gösterildikten sonra çağrılır; mesaj temizlensin diye.
  * @param hasReminder Bu şehir için hatırlatıcı kuruluysa üst bardaki zil dolu çizilir.
  * @param onCreateReminder Tarih seçicide seçilen gün için hatırlatıcı kurar.
+ * @param onDebugRunReminders Yalnızca debug derlemesinde dolu; zile uzun basınca çağrılır.
  */
 @Composable
 fun ForecastScreen(
@@ -129,7 +138,8 @@ fun ForecastScreen(
     onRefresh: () -> Unit = {},
     onRefreshMessageShown: () -> Unit = {},
     hasReminder: Boolean = false,
-    onCreateReminder: (LocalDate) -> Unit = {}
+    onCreateReminder: (LocalDate) -> Unit = {},
+    onDebugRunReminders: (() -> Unit)? = null
 ) {
     val condition = (uiState as? LoadState.Success)?.data?.current?.let {
         WeatherCondition.fromWeatherCode(it.weatherCode)
@@ -150,7 +160,8 @@ fun ForecastScreen(
             onRefresh = onRefresh,
             onRefreshMessageShown = onRefreshMessageShown,
             hasReminder = hasReminder,
-            onCreateReminder = onCreateReminder
+            onCreateReminder = onCreateReminder,
+            onDebugRunReminders = onDebugRunReminders
         )
     }
 }
@@ -174,7 +185,8 @@ private fun ForecastScaffold(
     onRefresh: () -> Unit,
     onRefreshMessageShown: () -> Unit,
     hasReminder: Boolean,
-    onCreateReminder: (LocalDate) -> Unit
+    onCreateReminder: (LocalDate) -> Unit,
+    onDebugRunReminders: (() -> Unit)?
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     // Seçilebilir tarihler şehrin bugününe göre. Tahmin henüz yüklenmediyse telefonun tarihi
@@ -210,7 +222,8 @@ private fun ForecastScaffold(
                         hasReminder = hasReminder,
                         cityToday = cityToday,
                         snackbarHostState = snackbarHostState,
-                        onCreateReminder = onCreateReminder
+                        onCreateReminder = onCreateReminder,
+                        onDebugRunNow = onDebugRunReminders
                     )
                 }
             )

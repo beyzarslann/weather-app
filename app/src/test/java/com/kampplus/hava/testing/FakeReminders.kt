@@ -61,7 +61,10 @@ class FakeReminderNotifier : ReminderNotifier {
     }
 }
 
-/** Planlama çağrılarını sırayla kaydeder: "daily", "cancel-daily", "check-soon", "eve:<id>", "cancel-eve:<id>". */
+/**
+ * Planlama çağrılarını sırayla kaydeder:
+ * "daily", "cancel-daily", "check-soon", "eve:<id>", "cancel-eve:<id>", "eve-now:<id>".
+ */
 class FakeReminderScheduler : ReminderScheduler {
     val calls = mutableListOf<String>()
 
@@ -83,6 +86,10 @@ class FakeReminderScheduler : ReminderScheduler {
 
     override fun cancelEve(reminderId: String) {
         calls += "cancel-eve:$reminderId"
+    }
+
+    override fun sendEveNow(reminderId: String) {
+        calls += "eve-now:$reminderId"
     }
 }
 

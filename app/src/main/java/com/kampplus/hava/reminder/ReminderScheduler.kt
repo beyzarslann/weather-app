@@ -37,6 +37,9 @@ interface ReminderScheduler {
 
     /** Hatırlatıcı silinince akşam bildirimini iptal eder. */
     fun cancelEve(reminderId: String)
+
+    /** Yalnızca debug: akşam özetini beklemeden, hemen gönderir. */
+    fun sendEveNow(reminderId: String)
 }
 
 /**
@@ -86,6 +89,15 @@ class WorkManagerReminderScheduler(context: Context) : ReminderScheduler {
 
     override fun cancelEve(reminderId: String) {
         workManager.cancelUniqueWork(eveWorkName(reminderId))
+    }
+
+    override fun sendEveNow(reminderId: String) {
+        val request = OneTimeWorkRequestBuilder<EveReminderWorker>()
+            .setConstraints(needsNetwork)
+            .setInputData(workDataOf(EveReminderWorker.KEY_REMINDER_ID to reminderId))
+            .build()
+        // Ayrı bir ad: asıl akşam planını (eveWorkName) silmesin.
+        workManager.enqueueUniqueWork("reminder-eve-debug-$reminderId", ExistingWorkPolicy.REPLACE, request)
     }
 
     private fun eveWorkName(reminderId: String) = "reminder-eve-$reminderId"
